@@ -1,13 +1,13 @@
 <template>
   <div class="flex justify-center">
-    <div class="space-y-2">
+    <div class="text-sm space-y-2">
 
       <div class="fixed overflow-auto h-[300px] w-[420px] top-0 text-sm mt-4 bg-stone-900 border-stone-700 border-4 p-2 rounded">
         <span class="text-yellow-400">Request utilizado para Google Pay</span>
         <pre class="text-white">{{ request }}</pre>
       </div>
 
-      <div class="bg-gray-800 w-[420px] space-y-4 p-2 rounded ">
+      <div class="bg-gray-800 w-[420px] p-2 rounded space-y-1">
         <div class="font-semibold text-white flex items-center gap-x-2 justify-center">
           Libreria de Google:
           <div class="checkbox-wrapper-10">
@@ -188,7 +188,7 @@ onMounted(() => {
   outline: 0;
   display: block;
   width: 4em;
-  height: 2em;
+  height: 1.5em;
   position: relative;
   cursor: pointer;
   -webkit-user-select: none;
@@ -219,7 +219,7 @@ onMounted(() => {
 }
 
 .checkbox-wrapper-10 .tgl-flip + .tgl-btn {
-  padding: 2px;
+  padding: 1px;
   transition: all 0.2s ease;
   font-family: sans-serif;
   perspective: 100px;
@@ -232,8 +232,7 @@ onMounted(() => {
   width: 100%;
   text-align: center;
   position: absolute;
-  line-height: 2em;
-  font-weight: bold;
+  line-height: 1.5em;
   color: #fff;
   position: absolute;
   top: 0;
