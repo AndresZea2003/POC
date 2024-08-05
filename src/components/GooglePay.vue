@@ -1,13 +1,13 @@
 <template>
   <div class="flex justify-center">
-    <div class="text-xl space-y-4">
+    <div class="space-y-2">
 
       <div class="fixed overflow-auto h-[300px] w-[420px] top-0 text-sm mt-4 bg-stone-900 border-stone-700 border-4 p-2 rounded">
         <span class="text-yellow-400">Request utilizado para Google Pay</span>
         <pre class="text-white">{{ request }}</pre>
       </div>
 
-      <div class="bg-gray-800 w-[420px] space-y-4 p-2 rounded">
+      <div class="bg-gray-800 w-[420px] space-y-4 p-2 rounded ">
         <div class="font-semibold text-white flex items-center gap-x-2 justify-center">
           Libreria de Google:
           <div class="checkbox-wrapper-10">
@@ -46,7 +46,7 @@
         <button id="google-pay-button"></button>
       </div>
 
-      <div class="fixed overflow-auto h-[300px] w-[420px] button-0 text-sm mb-4 bg-stone-900 border-stone-700 border-4 p-2 rounded">
+      <div class="fixed overflow-auto h-[300px] w-[420px] button-0 text-sm mb-6 bg-stone-900 border-stone-700 border-4 p-2 rounded">
         <span class="text-yellow-400">Respuesta del Servicio Google Pay</span>
         <pre class="text-white">{{ response ? response : 'Realiza un pago para ver la respuesta del servicio' }}</pre>
       </div>
