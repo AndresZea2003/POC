@@ -21,8 +21,8 @@ const onVisaClickToPayLoaded = () => {
   console.log('Script de VISA Click to Pay cargado.');
   // Configuración de VISA Click to Pay
   const visaCheckoutSettings = {
-    apikey: 'YOUR_API_KEY', // Reemplaza con tu API Key de VISA
-    encryptionKey: 'YOUR_ENCRYPTION_KEY', // Reemplaza con tu llave de encriptación
+    apikey: 'YOUR_API_KEY',
+    encryptionKey: 'YOUR_ENCRYPTION_KEY',
     paymentRequest: {
       currencyCode: 'USD',
       subtotal: '10.00'
