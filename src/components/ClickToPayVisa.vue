@@ -12,6 +12,7 @@ import { onMounted } from 'vue';
 
 const loadVisaClickToPay = async () => {
   console.log('Cargando script de VISA Click to Pay...');
+  console.log('ClientLibrary is: ', 'https://apitest.cybersource.com/up/v1/assets/0.19.2/SecureAcceptance.js');
   const script = document.createElement('script');
   script.src = 'https://apitest.cybersource.com/up/v1/assets/0.19.2/SecureAcceptance.js'; // clientLibrary obtenido de la captura de contexto
   script.async = true;
