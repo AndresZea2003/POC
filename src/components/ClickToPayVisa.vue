@@ -1,9 +1,7 @@
 <template>
   <div>
     <div id="buttonPaymentListContainer"></div>
-    <form id="authForm" action="/process-payment" method="POST">
-      <input type="text" id="transientToken" name="transientToken" />
-    </form>
+    <textarea id="transientToken" name="transientToken" rows="25" cols="50"></textarea>
   </div>
 </template>
 
@@ -38,8 +36,6 @@ const onVisaClickToPayLoaded = async () => {
         console.log('llego a t');
         const transientToken = document.getElementById('transientToken');
         transientToken.value = tt;
-        const authForm = document.getElementById('authForm');
-        authForm.submit();
 
         console.log('tt:', tt);
         console.log('GetElement Transient Token:', document.getElementById('transientToken').value);
