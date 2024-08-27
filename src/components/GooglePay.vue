@@ -12,7 +12,7 @@
           Libreria de Google:
           <div class="checkbox-wrapper-10">
             <input :checked="status.script" type="checkbox" id="cb5" class="tgl tgl-flip">
-            <label for="cb5" data-tg-on="Ok" data-tg-off="Nope" class="tgl-btn"></label>
+            <label for="cb5" data-tg-on="Ok" data-tg-off="No" class="tgl-btn"></label>
           </div>
         </div>
 
@@ -20,7 +20,7 @@
           Navegador compatible:
           <div class="checkbox-wrapper-10">
             <input :checked="status.script" type="checkbox" id="cb6" class="tgl tgl-flip">
-            <label for="cb6" data-tg-on="Sipi" data-tg-off="Nope" class="tgl-btn"></label>
+            <label for="cb6" data-tg-on="Si" data-tg-off="No" class="tgl-btn"></label>
           </div>
         </div>
 
@@ -111,9 +111,9 @@ const onGooglePayLoaded = () => {
       },
       transactionInfo: {
         totalPriceStatus: 'FINAL',
-        totalPrice: '10.00',
-        currencyCode: 'USD',
-        countryCode: 'US'
+        totalPrice: '1000',
+        currencyCode: 'COP',
+        countryCode: 'CO'
       }
     };
 
