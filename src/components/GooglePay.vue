@@ -100,8 +100,8 @@ const onGooglePayLoaded = () => {
         tokenizationSpecification: {
           type: 'PAYMENT_GATEWAY',
           parameters: {
-            gateway: 'example',
-            gatewayMerchantId: 'exampleMerchantId'
+            gateway: 'placetopay',
+            gatewayMerchantId: 'placetopay'
           }
         }
       }],
