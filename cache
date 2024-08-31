@@ -1,0 +1,261 @@
+import type { APIContext } from "astro";
+import crypto from "crypto";
+
+function getPrivateKey(): string {
+  const privateKey = import.meta.env.MERCHANT_PRIVATE_KEY;
+  if (!privateKey) {
+    throw new Error(
+      "MERCHANT_PRIVATE_KEY is not set in the environment variables"
+    );
+  }
+
+  return privateKey
+    .replace(/\\n/g, "\n")
+    .trim()
+    .replace(
+      /^(?!-----BEGIN EC PRIVATE KEY-----)/,
+      "-----BEGIN EC PRIVATE KEY-----\n"
+    )
+    .replace(
+      /(?<!-----END EC PRIVATE KEY-----)$/,
+      "\n-----END EC PRIVATE KEY-----"
+    );
+}
+
+function deriveKey(privateKey: string, ephemeralPublicKey: string): Buffer {
+  const ecdh = crypto.createECDH("prime256v1");
+
+  const privateKeyBuffer = Buffer.from(privateKey);
+
+  // Verificar que la clave privada sea válida para la curva prime256v1
+
+  try {
+    ecdh.generateKeys();
+    ecdh.setPrivateKey(privateKeyBuffer);
+    console.log("La clave privada es válida para la curva prime256v1");
+  } catch (error) {
+    console.error("Error generating keys:", error);
+    throw new Error("Failed to generate keys: " + error.message);
+  }
+
+  return;
+
+  try {
+    ecdh.setPrivateKey(privateKeyBuffer);
+  } catch (error) {
+    console.error("Error setting private key:", error);
+    throw new Error("Failed to set private key: " + error.message);
+  }
+
+  try {
+    const sharedSecret = ecdh.computeSecret(
+      Buffer.from(ephemeralPublicKey, "base64")
+    );
+    const hkdf = crypto
+      .createHmac("sha256", sharedSecret)
+      .update(Buffer.from("Google", "utf8"))
+      .digest();
+
+    return hkdf;
+  } catch (error) {
+    console.error("Error computing shared secret:", error);
+    throw new Error("Failed to compute shared secret: " + error.message);
+  }
+}
+
+function decryptGooglePayToken(token: any, privateKey: string): any {
+  if (!token || typeof token !== "object") {
+    throw new Error("Invalid token: expected an object");
+  }
+
+  console.log("Token structure:", JSON.stringify(token, null, 2));
+
+  if (!token.signedMessage) {
+    throw new Error("Invalid token structure: missing signedMessage");
+  }
+
+  let signedMessage;
+  try {
+    signedMessage = JSON.parse(token.signedMessage);
+    console.log("Signed message:", JSON.stringify(signedMessage, null, 2));
+  } catch (error) {
+    throw new Error("Invalid signedMessage: not a valid JSON");
+  }
+
+  if (
+    !signedMessage.ephemeralPublicKey ||
+    !signedMessage.encryptedMessage ||
+    !signedMessage.tag
+  ) {
+    throw new Error("Invalid signedMessage structure: missing required fields");
+  }
+
+  console.log(
+    "Ephemeral public key (base64):",
+    signedMessage.ephemeralPublicKey
+  );
+  console.log("Private key (first 20 chars):", privateKey.substring(0, 20));
+
+  const ephemeralPublicKey = Buffer.from(
+    signedMessage.ephemeralPublicKey,
+    "base64"
+  );
+  const encryptedMessage = Buffer.from(
+    signedMessage.encryptedMessage,
+    "base64"
+  );
+  const tag = Buffer.from(signedMessage.tag, "base64");
+
+  console.log("Encrypted message:", encryptedMessage.toString("base64"));
+  console.log("Ephemeral public key:", ephemeralPublicKey.toString("base64"));
+  console.log("Tag:", tag.toString("base64"));
+
+  try {
+    const derivedKey = deriveKey(
+      "MHcCAQEEIPq2rvXK5WwpcfBEfbquBTLzvOsojyznzOb+t66lHYvRoAoGCCqGSM49AwEHoUQDQgAEUllHEKh5HtNVZXiaKLUH69LyaVsGET15kr6GR2kBJ3YEJ5ItNpnjUUOOJQNfPKltH6bSD9GFhPQD/EKaVrrMBA==",
+      signedMessage.ephemeralPublicKey
+    );
+    const symmetricEncryptionKey = derivedKey.slice(0, 32);
+    const macKey = derivedKey.slice(32);
+
+    const expectedMac = crypto
+      .createHmac("sha256", macKey)
+      .update(encryptedMessage)
+      .digest();
+
+    console.log("Expected MAC:", expectedMac.toString("base64"));
+
+    if (!crypto.timingSafeEqual(expectedMac, tag)) {
+      throw new Error("Invalid MAC");
+    }
+
+    const decipher = crypto.createDecipheriv(
+      "aes-256-ctr",
+      symmetricEncryptionKey,
+      Buffer.alloc(16)
+    );
+    let decrypted = decipher.update(encryptedMessage);
+    decrypted = Buffer.concat([decrypted, decipher.final()]);
+
+    return JSON.parse(decrypted.toString("utf8"));
+  } catch (error) {
+    console.error("Error in decryption process:", error);
+    throw error;
+  }
+}
+
+export async function POST({ request }: APIContext): Promise<Response> {
+  try {
+    const body = await request.json();
+    const { tokenData } = body;
+
+    if (!tokenData) {
+      return new Response(
+        JSON.stringify({ success: false, message: "Token data is required" }),
+        {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    console.log("Received tokenData:", tokenData);
+
+    const merchantPrivateKey = getPrivateKey();
+    const merchantId = import.meta.env.MERCHANT_ID;
+
+    if (!merchantPrivateKey || !merchantId) {
+      console.error("Merchant credentials are not properly configured");
+      return new Response(
+        JSON.stringify({
+          success: false,
+          message: "Server configuration error",
+        }),
+        {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    console.log(
+      "Merchant Private Key (first 20 chars):",
+      merchantPrivateKey.substring(0, 20)
+    );
+
+    // try {
+    //   const ecdh = crypto.createECDH("prime256v1");
+    //   const privateKeyPEM = merchantPrivateKey
+    //     .replace(/-----BEGIN EC PRIVATE KEY-----/, "")
+    //     .replace(/-----END EC PRIVATE KEY-----/, "")
+    //     .replace(/\s/g, "");
+
+    //   console.log("Private Key PEM (base64):", privateKeyPEM);
+
+    //   const privateKeyBuffer = Buffer.from(privateKeyPEM, "base64");
+    //   console.log("Private Key Buffer:", privateKeyBuffer.toString("hex"));
+
+    //   ecdh.setPrivateKey(privateKeyBuffer);
+    //   console.log("La clave privada es válida para la curva prime256v1");
+    // } catch (error) {
+    //   console.error("Error al verificar la clave privada:", error);
+    //   throw new Error(
+    //     "La clave privada no es válida para la curva especificada"
+    //   );
+    // }
+
+    let token;
+    try {
+      token = typeof tokenData === "string" ? JSON.parse(tokenData) : tokenData;
+    } catch (error) {
+      console.error("Error parsing token data:", error);
+      return new Response(
+        JSON.stringify({
+          success: false,
+          message: "Invalid token data format",
+        }),
+        {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    const decryptedData = decryptGooglePayToken(token, merchantPrivateKey);
+
+    console.log(
+      "Decrypted payment data:",
+      JSON.stringify(decryptedData, null, 2)
+    );
+
+    // Aquí procesarías el pago con tu proveedor de pagos
+    // Por ejemplo: await processPaymentWithProvider(decryptedData);
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        message: "Payment processed successfully",
+        transactionId: crypto.randomUUID(), // Simula un ID de transacción
+        decryptedData: decryptedData, // Incluye los datos desencriptados en la respuesta
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }
+    );
+  } catch (error) {
+    console.error("Error processing payment:", error);
+    return new Response(
+      JSON.stringify({
+        success: false,
+        message: "Error processing payment",
+        error: error instanceof Error ? error.message : "Unknown error",
+        stack: error instanceof Error ? error.stack : undefined, // Solo para depuración, eliminar en producción
+      }),
+      {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      }
+    );
+  }
+}
