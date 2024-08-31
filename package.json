@@ -1,5 +1,5 @@
 {
-  "name": "nuclear-nebula",
+  "name": "poc",
   "type": "module",
   "version": "0.0.1",
   "scripts": {
@@ -10,6 +10,7 @@
     "astro": "astro"
   },
   "dependencies": {
+    "@astrojs/node": "^8.3.3",
     "@astrojs/tailwind": "^5.1.0",
     "@astrojs/vue": "^4.5.0",
     "@basis-theory/google-pay-js": "^1.0.0",
