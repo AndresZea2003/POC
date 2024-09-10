@@ -174,8 +174,8 @@ const onGooglePayButtonClicked = async (paymentsClient, paymentDataRequest) => {
     paymentData.value = await paymentsClient.loadPaymentData(
       paymentRequest.value
     );
-    // simulateDecryption(paymentData.value);
-    await sendPaymentDataToServer(paymentData.value);
+    simulateDecryption(paymentData.value);
+    // await sendPaymentDataToServer(paymentData.value);
     currentTab.value = "response";
   } catch (err) {
     console.error(err);
@@ -184,19 +184,20 @@ const onGooglePayButtonClicked = async (paymentsClient, paymentDataRequest) => {
 
 const simulateDecryption = (paymentDataValue) => {
   decryptedData.value = {
-    cardDetails: {
-      pan: "4111111111111111",
-      expirationMonth: "12",
-      expirationYear: "2025",
-    },
-    billingAddress: {
-      name: "John Doe",
-      address1: "1600 Amphitheatre Parkway",
-      locality: "Mountain View",
-      administrativeArea: "CA",
-      countryCode: "US",
-      postalCode: "94043",
-    },
+    "gatewayMerchantId": "googletest",
+    "messageExpiration": "1725986899985",
+    "messageId": "AH2Ejtf5xkNu0_0hU60yGyNLOSGZq3RcF8AUx2ralVwyijXjGnkDjlVJXXoDy9ha1Zd3tiwdQM6GIFYO2nNAHVi2Mqk7xydTwEj_zMrC_auEiE_DJVFkPCo",
+    "paymentMethod": "CARD",
+    "paymentMethodDetails": {
+      "expirationYear": 2026,
+      "expirationMonth": 12,
+      "pan": "5555555555554444",
+      "authMethod": "PAN_ONLY",
+      "assuranceDetails": {
+        "cardHolderAuthenticated": false,
+        "accountVerified": true
+      }
+    }
   };
 };
 
