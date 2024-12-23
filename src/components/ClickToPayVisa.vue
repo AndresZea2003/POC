@@ -45,7 +45,7 @@ const onVisaClickToPayLoaded = async () => {
 };
 
 onMounted(() => {
-  console.log('Actualizado el 23 de dic a las 03:52 pm')
+  console.log('Actualizado el 23 de dic a las 03:55 pm')
   loadVisaClickToPay();
 });
 </script>
