@@ -18,6 +18,7 @@ const loadVisaClickToPay = async () => {
     console.error('Error al cargar el script de VISA Click to Pay.');
   };
   document.head.appendChild(script);
+  document.querySelector('#buttonPaymentListContainer iframe').style.background = 'red';
 };
 
 const onVisaClickToPayLoaded = async () => {
