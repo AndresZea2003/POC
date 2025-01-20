@@ -18,7 +18,6 @@ const loadVisaClickToPay = async () => {
     console.error('Error al cargar el script de VISA Click to Pay.');
   };
   document.head.appendChild(script);
-  document.querySelector('#buttonPaymentListContainer iframe').style.background = 'red';
 };
 
 const onVisaClickToPayLoaded = async () => {
@@ -50,3 +49,19 @@ onMounted(() => {
   loadVisaClickToPay();
 });
 </script>
+
+<style>
+.button-payment-list-container iframe {
+  /* Estilos para el iframe */
+  width: 100%;
+  height: 500px;
+  border: none;
+}
+
+.button-payment-list-container button {
+  /* Estilos para el botón */
+  background-color: #007bff; /* Cambia el color de fondo */
+  color: white; /* Cambia el color del texto */
+  padding: 10px 20px; /* Cambia el tamaño del botón */
+  border-radius: 5px; /* Añade bordes redondeados */
+}
