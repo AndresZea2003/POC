@@ -25,30 +25,6 @@ const onVisaClickToPayLoaded = async () => {
   const showArgs = {
     containers: {
       paymentSelection: "#buttonPaymentListContainer"
-    },
-    styles: { // **Personalización de estilos**
-      'input': {
-        'font-size': '16px',
-        'color': '#3A3A3A'
-      },
-      '::placeholder': {
-        'color': 'blue'
-      },
-      ':focus': {
-        'color': 'blue'
-      },
-      ':hover': {
-        'font-style': 'italic'
-      },
-      ':disabled': {
-        'cursor': 'not-allowed',
-      },
-      'valid': {
-        'color': 'green'
-      },
-      'invalid': {
-        'color': 'red'
-      }
     }
   };
 
@@ -73,3 +49,14 @@ onMounted(() => {
   loadVisaClickToPay();
 });
 </script>
+
+<style scoped>
+.css-6lqsgy .loader-top {
+    display: flex;
+    gap: 10px;
+    padding: 7px 0px;
+    font-size: 16px;
+    line-height: 20px;
+    background-color: red;
+}
+</style>
