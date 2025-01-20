@@ -65,3 +65,4 @@ onMounted(() => {
   padding: 10px 20px; /* Cambia el tamaño del botón */
   border-radius: 5px; /* Añade bordes redondeados */
 }
+</style>
