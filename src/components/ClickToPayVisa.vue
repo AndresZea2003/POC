@@ -1,6 +1,6 @@
 <template>
   <div>
-    <div class="mx-auto px-4" id="buttonPaymentListContainer"></div>
+    <div class="px-4" id="buttonPaymentListContainer" style="width: 20px;"></div>
     <textarea class="my-5" id="transientToken" name="transientToken" rows="25" cols="50"></textarea>
   </div>
 </template>
@@ -26,16 +26,6 @@ const onVisaClickToPayLoaded = async () => {
     containers: {
       paymentSelection: "#buttonPaymentListContainer"
     },
-    style: {
-      button: {
-        backgroundColor: '#0066FF', // Change button background color
-        color: '#FFFFFF', // Change text color
-        width: '100%', // Make button full width
-        height: '48px', // Set button height
-        borderRadius: '8px', // Round the corners
-        fontSize: '16px' // Set font size
-      }
-    }
   };
 
   Accept(captureContext)
