@@ -49,14 +49,3 @@ onMounted(() => {
   loadVisaClickToPay();
 });
 </script>
-
-<style scoped>
-.css-6lqsgy .loader-top {
-    display: flex;
-    gap: 10px;
-    padding: 7px 0px;
-    font-size: 16px;
-    line-height: 20px;
-    background-color: red;
-}
-</style>
