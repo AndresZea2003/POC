@@ -1,6 +1,6 @@
 <template>
   <div class="max-w-1/3 mx-auto p-4 border rounded shadow">
-    <div id="buttonPaymentListContainer"></div>
+    <div class="max-w-1/3 mx-auto p-4 border rounded shadow" id="buttonPaymentListContainer"></div>
     <textarea id="transientToken" name="transientToken" rows="25" cols="50"></textarea>
   </div>
 </template>
