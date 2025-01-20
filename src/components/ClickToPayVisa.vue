@@ -1,8 +1,7 @@
 <template>
-  <div class="max-w-1/3 mx-auto p-4 border rounded">
-    <!--<div class="max-w-1/5 mx-auto px-10 border rounded" id="buttonPaymentListContainer"></div> -->
-    <div class="max-w-full mx-auto px-10 border rounded" id="buttonPaymentListContainer"></div>
-    <textarea id="transientToken" name="transientToken" rows="25" cols="50"></textarea>
+  <div>
+    <div class="max-w-xs mx-auto px-4 border rounded" id="buttonPaymentListContainer"></div>
+    <textarea class="my-5" id="transientToken" name="transientToken" rows="25" cols="50"></textarea>
   </div>
 </template>
 
