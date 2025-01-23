@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="px-4 border w-1/2 h-16" id="buttonPaymentListContainer"></div>
-    <textarea class="my-5" id="transientToken" name="transientToken" rows="25" cols="50"></textarea>
+    <textarea class="mt-10" id="transientToken" name="transientToken" rows="25" cols="50"></textarea>
   </div>
 </template>
 
