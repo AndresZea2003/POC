@@ -94,8 +94,10 @@ const onGooglePayLoaded = () => {
       allowedPaymentMethods: [{
         type: 'CARD',
         parameters: {
-          allowedAuthMethods: ['PAN_ONLY', 'CRYPTOGRAM_3DS'],
-          allowedCardNetworks: ['AMEX', 'DISCOVER', 'MASTERCARD', 'VISA']
+          allowedAuthMethods: ['CRYPTOGRAM_3DS'],
+          //allowedAuthMethods: ['PAN_ONLY', 'CRYPTOGRAM_3DS'],
+          allowedCardNetworks: ['AMEX', 'DISCOVER', 'MASTERCARD', 'VISA'],
+          assuranceDetailsRequired: true
         },
         tokenizationSpecification: {
           type: 'PAYMENT_GATEWAY',
