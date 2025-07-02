@@ -122,8 +122,8 @@ const onGooglePayLoaded = () => {
         {
           type: "CARD",
           parameters: {
-            allowedAuthMethods: ['CRYPTOGRAM_3DS'],
-            //allowedAuthMethods: ['PAN_ONLY', 'CRYPTOGRAM_3DS'],
+            // allowedAuthMethods: ['CRYPTOGRAM_3DS'],
+            allowedAuthMethods: ['PAN_ONLY', 'CRYPTOGRAM_3DS'],
             allowedCardNetworks: ['AMEX', 'DISCOVER', 'MASTERCARD', 'VISA'],
             assuranceDetailsRequired: true
           },
@@ -131,7 +131,7 @@ const onGooglePayLoaded = () => {
             type: "PAYMENT_GATEWAY",
             parameters: {
               gateway: "placetopay",
-              gatewayMerchantId: "placetopay",
+              gatewayMerchantId: "Este es un Example",
             },
           },
         },
@@ -142,7 +142,7 @@ const onGooglePayLoaded = () => {
       },
       transactionInfo: {
         totalPriceStatus: "FINAL",
-        totalPrice: "1000",
+        totalPrice: "2000",
         currencyCode: "COP",
         countryCode: "CO",
       },
