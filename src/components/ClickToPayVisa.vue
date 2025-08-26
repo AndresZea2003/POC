@@ -1,11 +1,11 @@
 <template>
-  <div class="flex flex-col items-center justify-center h-full my-5 bg-gray-100 p-6 rounded-lg shadow-lg">
+  <div class="flex flex-col items-center justify-center h-3/4 my-5 bg-gray-100 p-6 rounded-lg shadow-lg">
     <div
       class="w-full max-w-md p-4 border border-gray-300 rounded-lg bg-white shadow-md"
       id="buttonPaymentListContainer"
     ></div>
     <textarea
-      class="mt-6 w-full max-w-md h-48 p-4 border border-gray-300 rounded-lg bg-white shadow-md resize-none"
+      class="mt-6 w-full max-w-md h-80 p-4 border border-gray-300 rounded-lg bg-white shadow-md resize-none"
       id="transientToken"
       name="transientToken"
       placeholder="Token transitorio generado aparecerá aquí..."
