@@ -1,7 +1,15 @@
 <template>
-  <div>
-    <div class="p-6 border w-1/2 h-16" id="buttonPaymentListContainer"></div>
-    <textarea class="mt-12" id="transientToken" name="transientToken" rows="22" cols="60"></textarea>
+  <div class="flex flex-col items-center justify-center h-full bg-gray-100 p-6 rounded-lg shadow-lg">
+    <div
+      class="w-full max-w-md p-4 border border-gray-300 rounded-lg bg-white shadow-md"
+      id="buttonPaymentListContainer"
+    ></div>
+    <textarea
+      class="mt-6 w-full max-w-md h-48 p-4 border border-gray-300 rounded-lg bg-white shadow-md resize-none"
+      id="transientToken"
+      name="transientToken"
+      placeholder="Token transitorio generado aparecerá aquí..."
+    ></textarea>
   </div>
 </template>
 
