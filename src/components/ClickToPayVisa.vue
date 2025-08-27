@@ -1,59 +1,82 @@
 <template>
-  <div class="flex flex-col items-center justify-center h-3/4 my-5 bg-gray-100 p-6 rounded-lg shadow-lg">
+  <div class="flex flex-col items-center justify-center w-3/4 h-3/4 my-5 bg-gray-100 p-6 rounded-lg shadow-lg">
+    <!-- Contenedor de VISA -->
     <div
-      class="w-full max-w-md p-4 border border-gray-300 rounded-lg bg-white shadow-md"
-      id="buttonPaymentListContainer"
+        class="w-full max-w-md p-4 border border-gray-300 rounded-lg bg-white shadow-md"
+        id="buttonPaymentListContainer"
     ></div>
+
+    <!-- Textarea donde el usuario pega o ve el token transitorio -->
     <textarea
-      class="mt-6 w-full max-w-md h-80 p-4 border border-gray-300 rounded-lg bg-white shadow-md resize-none"
-      id="transientToken"
-      name="transientToken"
-      placeholder="Token transitorio generado aparecerá aquí..."
+        class="mt-6 w-full max-w-md h-40 p-4 border border-gray-300 rounded-lg bg-white shadow-md resize-none"
+        v-model="captureContext"
+        placeholder="Pega aquí tu captureContext generado..."
     ></textarea>
+
+    <!-- Textarea para mostrar el transient token -->
+    <textarea
+        class="mt-6 w-full max-w-md h-40 p-4 border border-gray-300 rounded-lg bg-white shadow-md resize-none"
+        v-model="transientToken"
+        placeholder="Aquí aparecerá el transientToken..."
+        readonly
+    ></textarea>
+
+    <button
+        class="mt-4 px-6 py-2 bg-blue-600 text-white rounded-lg shadow hover:bg-blue-700"
+        @click="startVisaFlow"
+    >
+      Iniciar flujo VISA
+    </button>
   </div>
 </template>
 
 <script setup>
-import { onMounted } from 'vue';
+import { ref, onMounted } from "vue";
+
+const captureContext = ref("");
+const transientToken = ref("");
 
 const loadVisaClickToPay = async () => {
-  console.log('Cargando script de VISA Click to Pay...');
-  const script = document.createElement('script');
-  script.src = 'https://apitest.cybersource.com/up/v1/assets/0.22.6/SecureAcceptance.js'; // clientLibrary obtenido de la captura de contexto
+  console.log("Cargando script de VISA Click to Pay...");
+  const script = document.createElement("script");
+  script.src =
+      "https://apitest.cybersource.com/up/v1/assets/0.22.6/SecureAcceptance.js";
   script.async = true;
-  script.onload = await onVisaClickToPayLoaded;
-  script.onerror = function() {
-    console.error('Error al cargar el script de VISA Click to Pay.');
-  };
+  script.onload = () => console.log("Script VISA cargado ✅");
+  script.onerror = () => console.error("Error al cargar el script de VISA.");
   document.head.appendChild(script);
 };
 
-const onVisaClickToPayLoaded = async () => {
-  const captureContext = 'eyJraWQiOiJ6dSIsImFsZyI6IlJTMjU2In0.eyJmbHgiOnsicGF0aCI6Ii9mbGV4L3YyL3Rva2VucyIsImRhdGEiOiJTWEtRZ05GNFJTQTRGQXJIZXJsUlFCQUFFSWs1NWNyd0RRWEIzSVIxUG05N2l6RzMxYTdXUEtPdmxjRURrWVFGenFZTjBqOTdtUGVaSEFqTlVZWUMvV1dGb3Z2WEJZUFI3NlBvcmFhNTBDSnMxYytJVE5QaUc5d1JUUEJ0Q29EK0pZTnA3ZldvbXFwbEoyN0szS1V5UU1lMmE2K1UvcjU0d2JsdG9TWGtFSlhQTHcwWitta2ZpVVRMR0xSbHQ1OWFrRVNFbWNieW1QSkY0bjhEcXdKcC9IMjFrQVx1MDAzZFx1MDAzZCIsIm9yaWdpbiI6Imh0dHBzOi8vdGVzdGZsZXguY3liZXJzb3VyY2UuY29tIiwidHJhbnNpZW50VG9rZW5PcGVyYXRpb25zIjpbeyJzdWIiOiJ0ZXN0Z2V0bmV0Y2xfc2FuZGJveDAwMSIsImF1ZCI6ImdldG5ldGNsX3NhbmRib3giLCJraWQiOiJlMDQ0OWFlOC01MWQ4LTQ0NDAtYjdiMy1iYjg0MWFmMzYyMDIiLCJ0eXBlIjoiU1RPUkUifV0sImp3ayI6eyJrdHkiOiJSU0EiLCJlIjoiQVFBQiIsInVzZSI6ImVuYyIsIm4iOiJwdFRXcDFQcjRHaGN3S0theWkzUnFQZUVnM1ZtX1Nzd01vV3VlSE5hU2xlTkVyckV1WGtzbDh1anNRWnd2OXprM2N4N2x2eTFJcUpJMUExbG5ob040enVtOFJILUJhRGpnS1FkdUlLck44alI4bVhlWlVTdnlOb1RBd2NydjBPMmtHdGlJUHR5WnVfZkNIdzRPc21QZUo1b1R4WEtIeGZQaFdsTHVhendXMm1rbEczX29RbzI4SnpKZG5YT2Y1b1FMc3ZmQ2dKdExiY3ZZc1NWZ3pHS3d3VFNxU3kzRFhGMkFXdTdaODlxRDRrNklpLTJzdy03ODFiRjZZcGxOcHpTRFY4b2FqUjI5V0RlN2tlMmRRdXFPdHZYRXlzMHpUNVk2T0pzMlVrTkRSRl9IOTg2a0ZhN3VKbXYzRlVhTlIyUnFibVhWWGU4TjRCX0M2M3BVbU1XM3ciLCJraWQiOiIwN1k5OVdkU0pMOGVlNWxmbFE4T0VDcEpnVDdQODlWMyJ9fSwiY3R4IjpbeyJkYXRhIjp7ImFsbG93ZWRQYXltZW50VHlwZXMiOlt7InBhZ2UiOjEsInR5cGUiOiJDTElDS1RPUEFZIn0seyJwYWdlIjoyLCJ0eXBlIjoiU1JDVklTQSJ9LHsicGFnZSI6MywidHlwZSI6IlNSQ01BU1RFUkNBUkQifSx7InBhZ2UiOjQsInR5cGUiOiJTUkNBTUVYIn0seyJwYWdlIjo1LCJ0eXBlIjoiUEFORU5UUlkifV0sInBheW1lbnRDb25maWd1cmF0aW9ucyI6eyJTUkNWSVNBIjp7Im9yaWdpbiI6Imh0dHBzOi8vc2FuZGJveC1hc3NldHMuc2VjdXJlLmNoZWNrb3V0LnZpc2EuY29tIiwicGF0aCI6Ii9jaGVja291dC13aWRnZXQvcmVzb3VyY2VzL2pzL3NyYy1pLWFkYXB0ZXIvdmlzYVNkay5qcz92MiIsInBhbkVuY3J5cHRpb25LZXkiOnsia3R5IjoiUlNBIiwiZSI6IkFRQUIiLCJ1c2UiOiJlbmMiLCJraWQiOiJXMFBaOFZYVVZFQlU5NUpPNlpEWTEzc3E1Si1keFRuNTZmSWJEWDZObWMzWmo5V3FjIiwibiI6InNaUEl1c0RmN3lRbm5oQmtVOW11MTRWT08zQ3J1aTNiN3JBZjJLWWVvYlVSbVhBMTdiMUpYOWpnMENkLXZncG11eVRyeEJVU2MtNGIwLVVQZ1N3R0ZxUFdVcHgwOEV4cXJ3UERPdkZvakJvdTJ3bHlxOGJjeTBVcy1CZmVDelNFNWxNVmRTWFRYWFhjTnF1LXFiMjJqQ0NDSkFMcHhzQXJzYm9NT1hzTGVkaDNNNFhOUTVYR0F0UmY3Yi0tdVRZNURyOUtMWXlVdlpLQW5ZMDRNS0pQRU81NFlpSUZNNURUQWhOT21zMDg5amRNZHgtVVJJS0pqUFUyLVJwSEcxdThMQ0cwMjhSVElwUHNOYlJhbnVTNVRBWV96bHhEZ2IxaEtKMzZZYlpFTkhMZzlQWFRCaGRPTWxVOTBEVExsZmNiTFRhLUQ3RGdsakFhV0N1dnpMUGFHdyJ9LCJwYXJhbWV0ZXJzIjp7InNyY0luaXRpYXRvcklkIjoiSkZDWjhRVk9KQTc2TlhaNjhGWkQyMVJZSXhqM3lQWmRpVXhrZE51aWJCbHhnd2FQNCIsInNyY2lEcGFJZCI6ImEwMWVlMjBlLWE2ZTgtNDI3OC1iNGRmLTkxNTIyZjMyODg4NyIsInNyY2lUcmFuc2FjdGlvbklkIjoiYTE0MGE5ZTQtZjhiMy00MWY3LTg5YTgtNDc5ZmQ4NDg1NGZhIiwiZHBhVHJhbnNhY3Rpb25PcHRpb25zIjp7ImRwYUxvY2FsZSI6ImVzX0NPIiwicGF5bG9hZFR5cGVJbmRpY2F0b3IiOiJGVUxMIiwicmV2aWV3QWN0aW9uIjoiY29udGludWUiLCJkcGFBY2NlcHRlZEJpbGxpbmdDb3VudHJpZXMiOltdLCJkcGFBY2NlcHRlZFNoaXBwaW5nQ291bnRyaWVzIjpbIlVTIiwiR0IiXSwiZHBhQmlsbGluZ1ByZWZlcmVuY2UiOiJBTEwiLCJkcGFTaGlwcGluZ1ByZWZlcmVuY2UiOiJOT05FIiwiY29uc3VtZXJOYW1lUmVxdWVzdGVkIjp0cnVlLCJjb25zdW1lckVtYWlsQWRkcmVzc1JlcXVlc3RlZCI6ZmFsc2UsImNvbnN1bWVyUGhvbmVOdW1iZXJSZXF1ZXN0ZWQiOmZhbHNlLCJtZXJjaGFudENvdW50cnlDb2RlIjoiQ08iLCJjdXN0b21JbnB1dERhdGEiOnsiY2hlY2tvdXRPcmNoZXN0cmF0b3IiOiJtZXJjaGFudCJ9LCJ0cmFuc2FjdGlvbkFtb3VudCI6eyJ0cmFuc2FjdGlvbkFtb3VudCI6IjIwMDAwIiwidHJhbnNhY3Rpb25DdXJyZW5jeUNvZGUiOiJDT1AifSwicGF5bWVudE9wdGlvbnMiOnsiZHBhRHluYW1pY0RhdGFUdGxNaW51dGVzIjoxNSwiZHBhUGFuUmVxdWVzdGVkIjpmYWxzZSwiZHluYW1pY0RhdGFUeXBlIjoiQ0FSRF9BUFBMSUNBVElPTl9DUllQVE9HUkFNX0xPTkdfRk9STSJ9fX19LCJTUkNNQVNURVJDQVJEIjp7Im9yaWdpbiI6Imh0dHBzOi8vc2FuZGJveC5zcmMubWFzdGVyY2FyZC5jb20iLCJwYXRoIjoiL3Nkay9zcmNzZGsubWFzdGVyY2FyZC5qcyIsInBhbkVuY3J5cHRpb25LZXkiOnsia3R5IjoiUlNBIiwiZSI6IkFRQUIiLCJ1c2UiOiJlbmMiLCJraWQiOiIyMDIzMDIwNzIyMzUyMS1zYW5kYm94LWZwYW4tZW5jcnlwdGlvbi1zcmMtbWFzdGVyY2FyZC1pbnQiLCJrZXlfb3BzIjpbImVuY3J5cHQiLCJ3cmFwS2V5Il0sImFsZyI6IlJTQS1PQUVQLTI1NiIsIm4iOiJ0MDZJOHNqbFMtcnJzN3VDYWdIOGV2b2V1bWFSb3ZLemlaU0k5UzJOOUlEUTl0VzJQYXBmUmE5TGMxS3ZlRUJEVnMyN1BraGtVNU95SGdQMGlFalR1S1Zwdmg1OVQ0bGEtbUJTSWxzN1VlY1VRTExhMFdrbWJ0TDdqTmRsdEE1ZnE3QWhjQXI1cWNhOTg4cXJMZDdJeXI5RTBDM1R4YlQ5dG8xaVFjcHo4b2NaT0RSWG9pZEZBbk9WTDVZR0ZtbHNyZURiSjRWaHNpMHBBZGNjUWNpbC15ZFNndXJLQi1ycUtwcGI5ZXBvbXU0UVVoMzM4MkN2OE5vYlltRjNvczhuR0dnR1AtY3lYbzBuc0tjUEFnZnJsUXpvczdxSHhVT3JGZTJ4X2xaMUcxQUUtWHJrcnhqQnlzOXE1M0dNUlNOQ1E4Yy1fbWNGOXBicTRIWUJzLXZENVEifSwicGFyYW1ldGVycyI6eyJzcmNpVHJhbnNhY3Rpb25JZCI6ImExNDBhOWU0LWY4YjMtNDFmNy04OWE4LTQ3OWZkODQ4NTRmYSIsInNyY2lEcGFJZCI6ImEwMWVlMjBlLWE2ZTgtNDI3OC1iNGRmLTkxNTIyZjMyODg4NyIsInNyY0luaXRpYXRvcklkIjoiODQ0ZjdlM2QtMDdmMC00NGIxLWEyMzctZTY0MjQ0NGUwNTEyIiwiZHBhVHJhbnNhY3Rpb25PcHRpb25zIjp7InRyYW5zYWN0aW9uVHlwZSI6IlBVUkNIQVNFIiwiZHBhTG9jYWxlIjoiZXNfQ08iLCJkcGFBY2NlcHRlZFNoaXBwaW5nQ291bnRyaWVzIjpbIlVTIiwiR0IiXSwiY29uc3VtZXJFbWFpbEFkZHJlc3NSZXF1ZXN0ZWQiOmZhbHNlLCJjb25zdW1lclBob25lTnVtYmVyUmVxdWVzdGVkIjpmYWxzZSwidHJhbnNhY3Rpb25BbW91bnQiOnsidHJhbnNhY3Rpb25BbW91bnQiOiIyMDAwMCIsInRyYW5zYWN0aW9uQ3VycmVuY3lDb2RlIjoiQ09QIn0sImRwYUFjY2VwdGVkQmlsbGluZ0NvdW50cmllcyI6W10sImRwYUJpbGxpbmdQcmVmZXJlbmNlIjoiRlVMTCIsImRwYVNoaXBwaW5nUHJlZmVyZW5jZSI6Ik5PTkUiLCJjb25zdW1lck5hbWVSZXF1ZXN0ZWQiOnRydWUsInBheWxvYWRUeXBlSW5kaWNhdG9yIjoiRlVMTCIsInBheW1lbnRPcHRpb25zIjp7ImR5bmFtaWNEYXRhVHlwZSI6IkNBUkRfQVBQTElDQVRJT05fQ1JZUFRPR1JBTV9TSE9SVF9GT1JNIn19fX0sIlNSQ0FNRVgiOnsib3JpZ2luIjoiaHR0cHM6Ly9xd3d3LmFleHAtc3RhdGljLmNvbSIsInBhdGgiOiIvYWthbWFpL3JlbW90ZWNvbW1lcmNlL3NjcmlwdHMvYW1leFNESy0xLjAuMC5qcyIsInBhbkVuY3J5cHRpb25LZXkiOnsia3R5IjoiUlNBIiwiZSI6IkFRQUIiLCJ1c2UiOiJlbmMiLCJraWQiOiJzcmMtYW1leC1jYXJkLWVuYy0yMDI1IiwiYWxnIjoiUlNBLU9BRVAtMjU2IiwibiI6InZNS0IzNkl1a3pvd2pCSVV2LTFDUkxOcjJPcnZoX1NCbU9YV2swUVVJdW0yYmN6cEFFbFBFV3Z0djJRN245SzFhTjh2elloM01ZeUduSDY4YXY0Q1J4b054OFBZVklPZWZOM0hyVU1NUkNzNzRQc2NkcE00TU5VaHBmSF9TVmFsdjNLWUZSRGFaeGZvY2UxRERRVVRkcjRyWFJyOW9XNGlRSVZkX2ZKTkJpTElVN2ZtU0hEZGs3bFZxUWdoYVBMSlhUQzZ4elF6a2phM0FQdm5ma2VYRlV2aVVYNnZ3cW4yYkxDaldnSFZjZDFucktNTmpTMU4yaXdrMFF3WmVuZGx5clRIcGU1NXdhSDhseGdsaVBFTlc1SHpnZDUwUUd6RU1panFCd01VRndFalVidW1rZndSNHZQay1HNUF2U3NCVG5JRWJXWE81WmtqeWltQWYtM09LYjRoYkRFUS14enM4bGpBUE1RT0p5MEI5dXJfOEVfVDhXRHRHODhxcVZkY2xwRlZtSERycWJqc2NUUGNpNGRkQWRxVi1wcHdCczcwNDJjbDNpdEVab05wSjl5cU81T0tzY21jS2pTMUpIbGxlaVlDMjQ4dzVxM1BYWHJfUDNTT2ppdFdsaS1vT2xPdENZSF8ycTBFczZSbndkekNIT1U4WFpPd2tJdmNoUUFEIn0sInBhcmFtZXRlcnMiOnsic3JjaVRyYW5zYWN0aW9uSWQiOiJhMTQwYTllNC1mOGIzLTQxZjctODlhOC00NzlmZDg0ODU0ZmEiLCJzcmNJbml0aWF0b3JJZCI6IjhlYzJjODg4LTY0Y2MtNGVmYy05MTc1LWIzMzc0NTJiMjhjOCIsImRwYURhdGEiOnsiZHBhTmFtZSI6IkdFVE5FVCBDSElMRSBTLkEuIiwiZHBhTG9nb1VyaSI6Imh0dHBzOi8vd3d3LmdldG5ldC5jbC8iLCJkcGFQcmVzZW50YXRpb25OYW1lIjoiR0VUTkVUIENISUxFIFMuQS4iLCJkcGFVcmkiOiJodHRwczovL3d3dy5nZXRuZXQuY2wvIn0sImRwYVRyYW5zYWN0aW9uT3B0aW9ucyI6eyJkcGFMb2NhbGUiOiJlc19DTyIsImRwYUFjY2VwdGVkQmlsbGluZ0NvdW50cmllcyI6W10sImRwYUFjY2VwdGVkU2hpcHBpbmdDb3VudHJpZXMiOlsiVVMiLCJHQiJdLCJkcGFCaWxsaW5nUHJlZmVyZW5jZSI6IkFMTCIsImRwYVNoaXBwaW5nUHJlZmVyZW5jZSI6Ik5PTkUiLCJjb25zdW1lck5hbWVSZXF1ZXN0ZWQiOnRydWUsImNvbnN1bWVyRW1haWxBZGRyZXNzUmVxdWVzdGVkIjpmYWxzZSwiY29uc3VtZXJQaG9uZU51bWJlclJlcXVlc3RlZCI6ZmFsc2UsInJldmlld0FjdGlvbiI6ImNvbnRpbnVlIiwidGhyZWVEc1ByZWZlcmVuY2UiOiJOT05FIn19fX0sImNhcHR1cmVNYW5kYXRlIjp7InNob3dDb25maXJtYXRpb25TdGVwIjp0cnVlLCJiaWxsaW5nVHlwZSI6IkZVTEwiLCJyZXF1ZXN0RW1haWwiOmZhbHNlLCJyZXF1ZXN0UGhvbmUiOmZhbHNlLCJyZXF1ZXN0U2hpcHBpbmciOmZhbHNlLCJzaGlwVG9Db3VudHJpZXMiOlsiVVMiLCJHQiJdLCJzaG93QWNjZXB0ZWROZXR3b3JrSWNvbnMiOnRydWV9LCJvcmRlckluZm9ybWF0aW9uIjp7ImFtb3VudERldGFpbHMiOnsidG90YWxBbW91bnQiOiIyMDAwMCIsImN1cnJlbmN5IjoiQ09QIn19LCJ0YXJnZXRPcmlnaW5zIjpbImh0dHBzOi8vcG9jLWxlbW9uLWZpdmUudmVyY2VsLmFwcCJdLCJpZnJhbWVzIjp7Im1jZSI6Ii9tY2UvbWNlLmh0bWwiLCJidXR0b25zIjoiL2J1dHRvbmxpc3QvYnV0dG9ubGlzdC5odG1sIiwic3JjIjoiL3NlY3VyZS1yZW1vdGUtY29tbWVyY2Uvc3JjLmh0bWwiLCJjdHAiOiIvY3RwL2N0cC5odG1sIiwiZ29vZ2xlcGF5IjoiL2dvb2dsZXBheS9nb29nbGVwYXkuaHRtbCIsImFwcGxlcGF5IjoiL2FwcGxlcGF5L2FwcGxlcGF5Lmh0bWwiLCJwYXplIjoiL3BhemUvcGF6ZS5odG1sIiwiY2hlY2siOiIvY2hlY2svY2hlY2suaHRtbCJ9LCJjbGllbnRWZXJzaW9uIjoiMC4yMiIsImNvdW50cnkiOiJDTyIsImxvY2FsZSI6ImVzX0NPIiwiYWxsb3dlZENhcmROZXR3b3JrcyI6WyJWSVNBIiwiTUFTVEVSQ0FSRCIsIkFNRVgiXSwiY3IiOiJIX3hDaGZqWVoydUxvbjBzZkIxZk5tby1SazZBc09icVVVVC1fX2R4Ym5WbFRieDZOOUVvUEVKM041eHNUY2ROaEN4WmtRdEEtRHlHSi15VDJlNFhqTkthRlVoQjQ0NEF6VlNTbUFPeXF1V0hlbFZLdnNpMUJZLVciLCJzZXJ2aWNlT3JpZ2luIjoiaHR0cHM6Ly90ZXN0dXAuY3liZXJzb3VyY2UuY29tIiwiY2xpZW50TGlicmFyeSI6Imh0dHBzOi8vdGVzdHVwLmN5YmVyc291cmNlLmNvbS91Yy92MS9hc3NldHMvMC4yMi42L1NlY3VyZUFjY2VwdGFuY2UuanMiLCJsb2dnaW5nUGF0aCI6Ii91Yy92MS9sb2ctZXZlbnRzIiwiYXNzZXRzUGF0aCI6Ii91Yy92MS9hc3NldHMvMC4yMi42IiwiY2xpZW50TGlicmFyeUludGVncml0eSI6InNoYTI1Ni0vKzJPdTJ3TGFVNXhYY2orSVUzbCs5M2ZPVFRDTTR4cEE0MjVYaHo3Z2RBXHUwMDNkIn0sInR5cGUiOiJnZGEtMC45LjAifV0sImlzcyI6IkZsZXggQVBJIiwiZXhwIjoxNzU2MjcyNTgxLCJpYXQiOjE3NTYyNzE2ODEsImp0aSI6InZxbFVXZ1pXWHJTNU5WdTQifQ.b2TXUue0OJxmOim0v1Tp8n610zi4zJARTkC4aIn8Jtb9f5gCitA1FRBUw91L3hB_EVjlRYiswZucixUmhZ-rscM5OGd2rxIihf1FCd1tRf8RwDmrZtd5z7xg9Byk1WMBCdxfsmv33Hy7iL1aarPK-u6Nf2fqB0CmQ_1C7ZOS6TwHRFqJHXJxZMHthRpOOtDmt3HAPVb_lGWYWLfCNNRzO8ZDNXo-yOADCYHy6TWfX9fNku4ktwFDjgRgA4i8V_mgg8JIphLDr97vKvM5vVwVbWfBd7u8aq7uHq63biJiYmGCGQsoghD9jcxXVza86kOv3Rl5ZEfv_ifKy5HNTAR37A';
-  const showArgs = {
-    containers: {
-      paymentSelection: "#buttonPaymentListContainer"
-    }
-  };
+const startVisaFlow = async () => {
+  if (!captureContext.value) {
+    console.error("No se ha definido captureContext 🚨");
+    return;
+  }
 
-  Accept(captureContext)
-      .then(accept => accept.unifiedPayments())
-      .then(up => up.show(showArgs))
-      .then(tt => {
-        const transientToken = document.getElementById('transientToken');
-        transientToken.value = tt;
+  try {
+    const showArgs = {
+      containers: {
+        paymentSelection: "#buttonPaymentListContainer",
+      },
+    };
 
-        console.log('tt:', tt);
-      })
-      .catch(error => {
-        console.error("Error en el flujo de Click to Pay:", error);
-      });
-
-  console.log('cargado script de VISA Click to Pay');
+    Accept(captureContext.value)
+        .then((accept) => accept.unifiedPayments())
+        .then((up) => up.show(showArgs))
+        .then((tt) => {
+          transientToken.value = tt; // guardo en la vista
+          console.log("tt:", tt);
+        })
+        .catch((error) => {
+          console.error("Error en flujo de Click to Pay:", error);
+        });
+  } catch (e) {
+    console.error("Error inesperado:", e);
+  }
 };
 
 onMounted(() => {
-  console.log('Actualizado el 27 de agosto a las 12:15 am')
+  console.log("Componente montado ✅");
   loadVisaClickToPay();
 });
 </script>
