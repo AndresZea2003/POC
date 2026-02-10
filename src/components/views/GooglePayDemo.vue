@@ -65,7 +65,7 @@
           </div>
         </div>
 
-        <div class="flex justify-center">
+        <div class="flex justify-end">
           <button :disabled="!paymentsClient" id="google-pay-button"></button>
         </div>
         <!-- <button
@@ -93,7 +93,7 @@ const currentTab = ref("request");
 const tabs = [
   { label: "Solicitud", value: "request" },
   { label: "Respuesta", value: "response" },
-  { label: "Datos Desencriptados", value: "decrypted" },
+  // { label: "Datos Desencriptados", value: "decrypted" },
 ];
 
 onMounted(() => {
