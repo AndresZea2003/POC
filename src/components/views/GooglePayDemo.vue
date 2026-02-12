@@ -118,6 +118,7 @@ const onGooglePayLoaded = () => {
     const paymentDataRequest = {
       apiVersion: 2,
       apiVersionMinor: 0,
+      emailRequired: true,
       allowedPaymentMethods: [
         {
           type: "CARD",
