@@ -27,7 +27,7 @@
     >
       Iniciar flujo VISA
     </button>
-    Test
+    Test _ 2
   </div>
 </template>
 
@@ -41,7 +41,7 @@ const loadVisaClickToPay = async () => {
   console.log("Cargando script de VISA Click to Pay...");
   const script = document.createElement("script");
   script.src =
-      "https://testup.cybersource.com/uc/v1/assets/a71EHIOuaG9ytdFKNJpRBePTbsN633cHmITo-L-RSqrOFhEq0I31Ylsn9pnOauK8h_Ej--ZmhGfnYFbwZaM9gluJ7TgVao_pyrm5x8vdBL514ypQ8MtAxqDb-JW-ko9bQsmbXH2TVU1Ehrlf9XD30iIHK6SwSumbZ97jNQP05Vm4LWCN0JdJ1ok2VM25PGE0BTT7NSfM/SecureAcceptance.js";
+      "https://up.cybersource.com/uc/v1/assets/aEnxu8PoToaryPM346kb0UxfZhQbiUYamVeA31G6TBQtr8otHl7SI9_45UzBECajVUUfAme-7WfsYDRQPmKZvY00G5aMR_4CHew3tIZYRwOPVd7S4M8C1BubV7h1LaA_VpxZBWyhXCgE4bRSsJmzH6qhdHpioJLzPKOtVOxnUEmNE-1m3Wp1YtLQ9kDq-zkapSCnLkWqs7Q/SecureAcceptance.js";
       // "https://up.cybersource.com/uc/v1/assets/0.34/SecureAcceptance.js";
   script.async = true;
   script.onload = () => console.log("Script VISA cargado ✅");
