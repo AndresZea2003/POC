@@ -40,7 +40,7 @@ const loadVisaClickToPay = async () => {
   console.log("Cargando script de VISA Click to Pay...");
   const script = document.createElement("script");
   script.src =
-      "https://up.cybersource.com/uc/v1/assets/0.30.2/SecureAcceptance.js";
+      "https://up.cybersource.com/uc/v1/assets/0.34/SecureAcceptance.js";
   script.async = true;
   script.onload = () => console.log("Script VISA cargado ✅");
   script.onerror = () => console.error("Error al cargar el script de VISA.");
