@@ -27,6 +27,7 @@
     >
       Iniciar flujo VISA
     </button>
+    Test
   </div>
 </template>
 
