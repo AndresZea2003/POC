@@ -1,0 +1,19 @@
+---
+import Layout from '../layouts/Layout.astro';
+import UnifiedClickToPayVisa from '../components/UnifiedClickToPayVisa.vue';
+---
+
+<Layout title="Unified Click to Pay (Visa UCTP)">
+	<div class="min-h-screen bg-slate-900 text-slate-100 p-4 md:p-8">
+		<header class="mb-6 flex flex-wrap items-center justify-between gap-4">
+			<h1 class="text-xl font-semibold tracking-tight">Unified Click to Pay (UCTP)</h1>
+			<a
+				href="/"
+				class="text-sm text-cyan-400 hover:text-cyan-300 underline underline-offset-2"
+			>
+				Volver al POC Click to Pay (CyberSource)
+			</a>
+		</header>
+		<UnifiedClickToPayVisa client:load />
+	</div>
+</Layout>
