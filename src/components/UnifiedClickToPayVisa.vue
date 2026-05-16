@@ -62,6 +62,19 @@
             placeholder="JWT de capture context"
           />
         </label>
+        <p class="text-xs text-slate-500 md:col-span-2">
+          <code class="text-slate-400">initialize()</code> debe recibir el objeto
+          <code class="text-slate-400">captureContext</code> con
+          <code class="text-slate-400">header</code>, <code class="text-slate-400">payload</code> y
+          <code class="text-slate-400">raw</code> (y en este POC también se repiten en la raíz como en el ejemplo JS).
+          El JWT lleva tres segmentos (<code class="text-slate-400">xx.yy.zz</code>); si falla algo interno («ctx»,
+          «find»…), marca «segmentos sin decodificar» o desmarca opciones extra de transacción. En esta llamada no se
+          envían <code class="text-slate-400">paymentOptions</code> — solo en <code class="text-slate-400">checkout()</code>.
+        </p>
+        <label class="flex items-center gap-2 text-sm md:col-span-2">
+          <input v-model="initializeJwtSegmentsRaw" type="checkbox" class="rounded border-slate-600" />
+          <span class="text-slate-300">initialize: segmentos JWT 1 y 2 sin decodificar (base64url)</span>
+        </label>
         <label class="flex items-center gap-2 text-sm md:col-span-2">
           <input v-model="includeDpaInInitialize" type="checkbox" class="rounded border-slate-600" />
           <span class="text-slate-300">Incluir dpaTransactionOptions en initialize()</span>
@@ -446,6 +459,7 @@ const clientLibraryUrl = ref((env.PUBLIC_VISA_UCTP_CLIENT_LIBRARY ?? '').trim())
 const clientLibraryIntegrity = ref((env.PUBLIC_VISA_UCTP_CLIENT_LIBRARY_INTEGRITY ?? '').trim());
 const captureContextJwt = ref((env.PUBLIC_VISA_UCTP_CAPTURE_CONTEXT ?? '').trim());
 const includeDpaInInitialize = ref(true);
+const initializeJwtSegmentsRaw = ref(false);
 
 const consumerEmail = ref(DEFAULT_EMAIL);
 const merchantOrderId = ref(typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : String(Date.now()));
@@ -751,8 +765,13 @@ function buildSdkUrl(): string {
   return url;
 }
 
-function buildDpaTransactionOptions(): Record<string, unknown> {
-  return {
+/**
+ * Opciones para VSDK checkout/getCards típicos — incluye `paymentOptions`.
+ * Para `initialize()` en flujo CyberSource suele mejor **no** incluir paymentOptions para evitar
+ * rutas internas que esperan listas desde el JWT (errores tipo «reading 'find'»).
+ */
+function buildDpaTransactionOptions(includePaymentOptions = true): Record<string, unknown> {
+  const options: Record<string, unknown> = {
     transactionAmount: {
       transactionAmount: transactionAmount.value,
       transactionCurrencyCode: transactionCurrencyCode.value,
@@ -763,14 +782,17 @@ function buildDpaTransactionOptions(): Record<string, unknown> {
     merchantCategoryCode: '4829',
     merchantCountryCode: 'US',
     merchantOrderId: merchantOrderId.value,
-    paymentOptions: [
+    dpaLocale: 'en_US',
+  };
+  if (includePaymentOptions) {
+    options.paymentOptions = [
       {
         dpaDynamicDataTtlMinutes: 2,
         dynamicDataType: 'CARD_APPLICATION_CRYPTOGRAM_LONG_FORM',
       },
-    ],
-    dpaLocale: 'en_US',
-  };
+    ];
+  }
+  return options;
 }
 
 function buildConsumerIdentity(): Record<string, string> {
@@ -779,6 +801,41 @@ function buildConsumerIdentity(): Record<string, string> {
     identityType: 'EMAIL_ADDRESS',
     identityValue: consumerEmail.value.trim(),
   };
+}
+
+/** Base64url JWT segment → UTF-8 string (CyberSource suele esperar header/payload decodificados). */
+function decodeJwtSegment(segment: string): string {
+  const pad = '='.repeat((4 - (segment.length % 4)) % 4);
+  const b64 = segment.replace(/-/g, '+').replace(/_/g, '/') + pad;
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return new TextDecoder('utf-8').decode(bytes);
+}
+
+/**
+ * Construye el objeto que documenta CyberSource/VSDK para initialize():
+ * `{ header, payload, raw }` con `raw` = JWT completo.
+ */
+function buildCybersourceInitializeFromJwt(trimmedJwt: string): { header: string; payload: string; raw: string } {
+  const parts = trimmedJwt.split('.').filter(Boolean);
+  if (parts.length < 3) {
+    throw new Error(`JWT inválido: esperados al menos 3 segmentos (.), encontrados ${parts.length}.`);
+  }
+  const raw = trimmedJwt;
+  if (initializeJwtSegmentsRaw.value) {
+    return { header: parts[0], payload: parts[1], raw };
+  }
+  try {
+    return {
+      header: decodeJwtSegment(parts[0]),
+      payload: decodeJwtSegment(parts[1]),
+      raw,
+    };
+  } catch (e: unknown) {
+    const hint = e instanceof Error ? e.message : String(e);
+    throw new Error(`Error decodificando header/payload del JWT: ${hint}`);
+  }
 }
 
 function loadSdk(): void {
@@ -871,18 +928,55 @@ async function runInitialize(): Promise<void> {
       pushLog('initialize', { mode: 'cybersource' }, undefined, msg);
       return;
     }
-    const req: Record<string, unknown> = { captureContext: jwt };
-    if (includeDpaInInitialize.value) {
-      req.dpaTransactionOptions = buildDpaTransactionOptions();
+    let initParts: { header: string; payload: string; raw: string };
+    try {
+      initParts = buildCybersourceInitializeFromJwt(jwt);
+    } catch (e: unknown) {
+      initializing.value = false;
+      const msg = e instanceof Error ? e.message : String(e);
+      pushLog('initialize', { mode: 'cybersource', parseError: true }, undefined, msg);
+      return;
     }
+    const captureCtx = {
+      header: initParts.header,
+      payload: initParts.payload,
+      raw: initParts.raw,
+    };
+    /**
+     * Algunos builds leen sólo `captureContext` (Java API spec); otros el ejemplo JS en raíz
+     * (`header` / `payload` / `raw`). Enviamos ambos sin duplicar referencias nuevas.
+     */
+    const req: Record<string, unknown> = {
+      captureContext: captureCtx,
+      header: captureCtx.header,
+      payload: captureCtx.payload,
+      raw: captureCtx.raw,
+    };
+    if (includeDpaInInitialize.value) {
+      req.dpaTransactionOptions = buildDpaTransactionOptions(false);
+    }
+    const logSafe: Record<string, unknown> = {
+      captureContext: {
+        header: '[redacted]',
+        payload: '[redacted]',
+        raw: '[JWT redacted]',
+      },
+      header: '[redacted]',
+      payload: '[redacted]',
+      raw: '[JWT redacted]',
+    };
+    if (includeDpaInInitialize.value) {
+      logSafe.dpaTransactionOptions = buildDpaTransactionOptions(false);
+    }
+    logSafe.segmentFormat = initializeJwtSegmentsRaw.value ? 'base64url_sin_decodificar' : 'decoded_utf8';
     try {
       await V.initialize(req);
       initialized.value = true;
-      pushLog('initialize', { ...req, captureContext: '[JWT redacted]' }, { ok: true });
+      pushLog('initialize', logSafe, { ok: true });
     } catch (e: unknown) {
       initialized.value = false;
       const msg = e instanceof Error ? e.message : String(e);
-      pushLog('initialize', { ...req, captureContext: '[JWT redacted]' }, undefined, msg);
+      pushLog('initialize', logSafe, undefined, msg);
     } finally {
       initializing.value = false;
     }
