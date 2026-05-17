@@ -1,5 +1,5 @@
 <!--
-  Unified Click to Pay (Cybersource UCTP POC).
+  Unified Click to Pay (Cybersource UCTP POC). Redes: Visa + Mastercard (AMEX fuera de alcance por ahora).
   Cybersource: https://developer.cybersource.com/docs/cybs/en-us/unified-click-to-pay/developer/all/rest/unified-click-to-pay/uctp-integration-details/uctp-cs-setup.html
   Env: PUBLIC_VISA_UCTP_CLIENT_LIBRARY, PUBLIC_VISA_UCTP_CLIENT_LIBRARY_INTEGRITY, PUBLIC_VISA_UCTP_CAPTURE_CONTEXT;
 -->
@@ -75,12 +75,19 @@
             <code class="text-slate-400">ctx</code>) y <code class="text-slate-400">raw</code> en la raíz; el SDK v0.6.0
             usa <code class="text-slate-400">payload.ctx.find(...)</code> y falla si payload es solo string.
           </li>
+          <li>
+            Redes UCTP activas: Visa y Mastercard (<code class="text-slate-400">SRCVISA</code>,
+            <code class="text-slate-400">SRCMASTERCARD</code>). AMEX no está en alcance: al incluirla en
+            <code class="text-slate-400">allowedCardNetworks</code> el JWT trae <code class="text-slate-400">SRCAMEX</code>
+            y el SDK exige <code class="text-slate-400">transactionAmount</code> en todas las redes.
+          </li>
         </ul>
         <label class="flex items-start gap-2 text-sm md:col-span-2">
           <input v-model="initializeIncludeDpaOptions" type="checkbox" class="mt-1 rounded border-slate-600" />
           <span class="text-slate-400">
             Incluir <code class="text-slate-300">dpaTransactionOptions</code> en
-            <code class="text-slate-300">initialize()</code> (opcional según spec; por defecto no se envía).
+            <code class="text-slate-300">initialize()</code>
+            <span class="text-slate-500"> (opcional; marcar si el JWT no trae monto o al reactivar AMEX más adelante).</span>
           </span>
         </label>
       </div>
@@ -411,7 +418,10 @@ const DEFAULT_AMOUNT_BY_CURRENCY: Record<string, string> = {
 const clientLibraryUrl = ref((env.PUBLIC_VISA_UCTP_CLIENT_LIBRARY ?? '').trim());
 const clientLibraryIntegrity = ref((env.PUBLIC_VISA_UCTP_CLIENT_LIBRARY_INTEGRITY ?? '').trim());
 const captureContextJwt = ref((env.PUBLIC_VISA_UCTP_CAPTURE_CONTEXT ?? '').trim());
-/** Opcional: incluir dpaTransactionOptions en initialize() CyberSource (por defecto omitido). */
+/** Redes SRC consideradas en el POC (AMEX excluida hasta habilitar DPA + allowedCardNetworks en backend). */
+const UCTP_ACTIVE_SRC_NETWORKS = ['SRCVISA', 'SRCMASTERCARD'] as const;
+
+/** Incluir dpaTransactionOptions en initialize() (opcional con JWT solo Visa/MC). */
 const initializeIncludeDpaOptions = ref(false);
 
 const consumerEmail = ref(DEFAULT_EMAIL);
@@ -735,7 +745,7 @@ function deriveDpaDefaultsFromDecodedPayload(payload: Record<string, unknown>): 
     const first = (ctx[0] ?? {}) as Record<string, unknown>;
     const data = (first.data ?? {}) as Record<string, unknown>;
     const paymentConfigurations = (data.paymentConfigurations ?? {}) as Record<string, unknown>;
-    const preferredOrder = ['SRCVISA', 'SRCMASTERCARD'];
+    const preferredOrder = [...UCTP_ACTIVE_SRC_NETWORKS];
     let selected: Record<string, unknown> | null = null;
     for (const network of preferredOrder) {
       const cfg = paymentConfigurations[network];
