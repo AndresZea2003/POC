@@ -77,27 +77,24 @@
           </li>
           <li>No reutilizar script/JWT cruzados entre sesiones ni mezclas con otros productos (Flex / CTP clásico).</li>
           <li>
-            <code class="text-slate-400">initialize()</code>: contrato oficial
-            <code class="text-slate-400">captureContext</code> con segmentos JWT 1–2 decodificados UTF-8; sin
-            <code class="text-slate-400">dpaTransactionOptions</code> hasta que soporte/tu guía lo pida explícito.
+            El JWT de UCTP lleva en el payload (segmento central) un arreglo
+            <code class="text-slate-400">ctx</code>; si falta o no es lista, el SDK lanza
+            «<code class="text-slate-400">reading 'ctx'</code>».
+          </li>
+          <li>
+            <code class="text-slate-400">initialize()</code> recibe
+            <code class="text-slate-400">header</code>, <code class="text-slate-400">payload</code> y
+            <code class="text-slate-400">raw</code> como parámetros raíz directos (spec CyberSource); no van
+            anidados bajo ninguna propiedad.
           </li>
         </ul>
-        <details class="rounded border border-slate-700/80 bg-slate-900/30 md:col-span-2">
-          <summary class="cursor-pointer px-3 py-2 text-sm font-medium text-slate-400">
-            Opciones avanzadas — snippet JS legacy (soporte)
-          </summary>
-          <div class="border-t border-slate-700/60 px-3 py-3">
-            <label class="flex items-start gap-2 text-sm">
-              <input v-model="initializeUseLegacyFlatRootShape" type="checkbox" class="mt-1 rounded border-slate-600" />
-              <span class="text-slate-400">
-                Usar forma plana
-                <code class="text-slate-300">initialize({ header, payload, raw })</code>
-                como en ejemplos viejos, en lugar del objeto único
-                <code class="text-slate-300">captureContext</code>.
-              </span>
-            </label>
-          </div>
-        </details>
+        <label class="flex items-start gap-2 text-sm md:col-span-2">
+          <input v-model="initializeIncludeDpaOptions" type="checkbox" class="mt-1 rounded border-slate-600" />
+          <span class="text-slate-400">
+            Incluir <code class="text-slate-300">dpaTransactionOptions</code> en
+            <code class="text-slate-300">initialize()</code> (opcional según spec; por defecto no se envía).
+          </span>
+        </label>
       </div>
 
       <div v-else class="grid gap-4 md:grid-cols-2">
@@ -477,10 +474,8 @@ const sdkLoadMode = ref<SdkLoadMode>('cybersource');
 const clientLibraryUrl = ref((env.PUBLIC_VISA_UCTP_CLIENT_LIBRARY ?? '').trim());
 const clientLibraryIntegrity = ref((env.PUBLIC_VISA_UCTP_CLIENT_LIBRARY_INTEGRITY ?? '').trim());
 const captureContextJwt = ref((env.PUBLIC_VISA_UCTP_CAPTURE_CONTEXT ?? '').trim());
-/**
- * Avanzado: reproducir ejemplo JS legacy (header/payload/raw en raíz). Camino estándar: sólo objeto `captureContext`.
- */
-const initializeUseLegacyFlatRootShape = ref(false);
+/** Opcional: incluir dpaTransactionOptions en initialize() CyberSource (por defecto omitido). */
+const initializeIncludeDpaOptions = ref(false);
 
 const consumerEmail = ref(DEFAULT_EMAIL);
 const merchantOrderId = ref(typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : String(Date.now()));
@@ -855,17 +850,25 @@ function buildCybersourceInitializeFromJwt(trimmedJwt: string): { header: string
   }
 }
 
-/**
- * El cliente UCTP espera que el JWT (payload decodificado) contenga objeto `ctx`.
- */
-function getUctpJwtPayloadHeuristicWarning(decodedPayloadJsonString: string): string {
+/** Valida payload decodificado (UTF‑8) del JWT de capture context venido de POST `/uctp/v1/sessions`. Vacío ⇒ OK. */
+function validateUctpSessionsCaptureJwtDecodedPayload(payloadUtf8Json: string): string {
+  let o: Record<string, unknown>;
   try {
-    const o = JSON.parse(decodedPayloadJsonString) as Record<string, unknown>;
-    if ('ctx' in o && o.ctx !== null && typeof o.ctx === 'object') return '';
-    return 'El JWT decodificado debe incluir un objeto `ctx` en el payload. Sin él suele aparecer «reading \'ctx\'» en initialize(). Usa el JWT devuelto por `/uctp/v1/sessions` (misma respuesta que `clientLibrary`).';
+    o = JSON.parse(payloadUtf8Json) as Record<string, unknown>;
   } catch {
-    return 'El payload del JWT no es JSON válido al decodificar.';
+    return 'El payload del JWT no es JSON válido tras base64url → UTF‑8.';
   }
+  if (!Object.prototype.hasOwnProperty.call(o, 'ctx')) {
+    return 'Falta `ctx` en el payload JSON. Suele aparecer «reading \'ctx\'» en initialize() si pegas otro JWT (p. ej. Microform/Flex, token de campo equivocado del JSON). Usa literalmente el capture context JWT de esa misma respuesta `/uctp/v1/sessions`.';
+  }
+  const ctx = o.ctx;
+  if (!Array.isArray(ctx)) {
+    return `\`ctx\` debe ser un arreglo (documentación UCTP CyberSource); ahora es ${typeof ctx}. Revisa que el texto pegado sea el JWT correcto del endpoint de sesiones.`;
+  }
+  if (ctx.length === 0) {
+    return '`ctx` está vacío ([]); no es un capture context válido para el SDK.';
+  }
+  return '';
 }
 
 const uctpJwtPayloadWarning = computed((): string => {
@@ -876,7 +879,7 @@ const uctpJwtPayloadWarning = computed((): string => {
   if (parts.length < 3) return 'El JWT debería tener 3 segmentos separados por puntos.';
   try {
     const payloadStr = decodeJwtSegment(parts[1]);
-    return getUctpJwtPayloadHeuristicWarning(payloadStr);
+    return validateUctpSessionsCaptureJwtDecodedPayload(payloadStr);
   } catch {
     return '';
   }
@@ -1003,26 +1006,36 @@ async function runInitialize(): Promise<void> {
       payload: initParts.payload,
       raw: initParts.raw,
     };
-    /** Sintaxis CyberSource habitual: `captureContext`. La forma plana es sólo opción avanzada (snippet JS antiguo). */
-    const req: Record<string, unknown> = initializeUseLegacyFlatRootShape.value ? { ...core } : { captureContext: core };
-    const logSafe: Record<string, unknown> = initializeUseLegacyFlatRootShape.value
-      ? {
-          header: '[redacted]',
-          payload: '[redacted]',
-          raw: '[JWT redacted]',
-          initializeShape: 'legacy_flat_header_payload_raw',
-          note:
-            'Ruta soporte sólo para snippets antiguos. Camino habitual: objeto captureContext (CyberSource Syntax).',
-        }
-      : {
-          captureContext: {
-            header: '[redacted]',
-            payload: '[redacted]',
-            raw: '[JWT redacted]',
-          },
-          initializeShape: 'captureContext_object_canonical',
-        };
-    logSafe.pairingReminder = 'JWT + clientLibrary (+ integrity) del mismo POST /uctp/v1/sessions';
+    const payloadShapeError = validateUctpSessionsCaptureJwtDecodedPayload(initParts.payload);
+    if (payloadShapeError) {
+      initializing.value = false;
+      pushLog(
+        'initialize',
+        {
+          mode: 'cybersource',
+          abortedBeforeSdkCall: true,
+          reason: 'capture_context_payload_shape',
+          shapeHint: 'El JWT UCTP válido lleva payload.ctx como arreglo (doc. extractPanEncryptionKeys / initialize).',
+        },
+        undefined,
+        payloadShapeError,
+      );
+      return;
+    }
+    /** Spec CyberSource: header, payload, raw son parámetros raíz directos (no anidados bajo captureContext). */
+    const req: Record<string, unknown> = { ...core };
+    if (initializeIncludeDpaOptions.value) {
+      req.dpaTransactionOptions = buildDpaTransactionOptions(false);
+    }
+    const logSafe: Record<string, unknown> = {
+      header: '[redacted]',
+      payload: '[redacted]',
+      raw: '[JWT redacted]',
+      pairingReminder: 'JWT + clientLibrary (+ integrity) del mismo POST /uctp/v1/sessions',
+    };
+    if (initializeIncludeDpaOptions.value) {
+      logSafe.dpaTransactionOptions = req.dpaTransactionOptions;
+    }
     try {
       await V.initialize(req);
       initialized.value = true;
