@@ -303,9 +303,23 @@
         </li>
       </ul>
       <p class="mt-4 text-xs text-slate-500">
-        El enrolamiento / CVM de Visa se abre siempre en ventana emergente (<code class="text-slate-400">windowRef</code>).
-        El resultado operativo lo devuelve la promesa de <code class="text-slate-400">checkout()</code>.
+        Con tarjeta guardada, <code class="text-slate-400">checkout()</code> sigue el
+        <a
+          class="text-sky-400 underline"
+          href="https://developer.cybersource.com/docs/cybs/en-us/unified-click-to-pay/developer/all/rest/unified-click-to-pay/uctp-getting-started/uctp-get-started-checkout.html"
+          target="_blank"
+          rel="noopener noreferrer"
+        >ejemplo Cybersource</a>
+        (sin <code class="text-slate-400">windowRef</code>). Si el SDK pide CVM en pop-up, marca la opción de abajo.
       </p>
+      <label class="mt-2 flex items-start gap-2 text-sm">
+        <input v-model="checkoutUseWindowRefPopup" type="checkbox" class="mt-1 rounded border-slate-600" />
+        <span class="text-slate-400">
+          Abrir pop-up y pasar <code class="text-slate-300">windowRef</code> (no enumerable: el SDK hace
+          <code class="text-slate-300">JSON.stringify</code> del request y falla si <code class="text-slate-300">windowRef</code>
+          es propiedad enumerable).
+        </span>
+      </label>
       <label class="mt-2 flex items-center gap-2 text-sm">
         <span class="text-slate-400">payloadTypeIndicatorCheckout</span>
         <select
@@ -337,7 +351,7 @@
         />
       </label>
       <p class="mb-2 text-xs text-slate-500">
-        Misma lógica de <code class="text-slate-400">windowRef</code> en pop-up que en tarjetas guardadas.
+        Enrolamiento: se usa pop-up con <code class="text-slate-400">windowRef</code> no enumerable (evita error «property window closes the circle»).
       </p>
       <button
         type="button"
@@ -442,6 +456,8 @@ const validationOtp = ref('');
 const requestedValidationChannelId = ref('');
 const encryptedCardJwe = ref('');
 const payloadTypeIndicatorCheckout = ref<'FULL' | 'SUMMARY'>('FULL');
+/** Pop-up + windowRef solo si el flujo lo exige (p. ej. CVM); por defecto off en tarjeta guardada. */
+const checkoutUseWindowRefPopup = ref(false);
 
 /** Imágenes de card art que fallan al cargar (CORS u origen). */
 const failedCardArt = ref<Record<string, boolean>>({});
@@ -654,18 +670,59 @@ function openUctpCheckoutPopup(): Window | null {
 }
 
 /**
- * Resuelve windowRef para checkout. Si abrimos pop-up propio, devolvemos esa ventana en `popupToClose`.
- * La respuesta de negocio llega siempre vía la promesa de `checkout()`, no leyendo el DOM del pop-up.
+ * windowRef no puede ser enumerable: VSDK clona/loguea el request con JSON.stringify y Window es circular.
  */
-function resolveCheckoutWindowRef(): {
-  extras: Record<string, unknown>;
-  popupToClose: Window | null;
-} {
-  const popup = openUctpCheckoutPopup();
-  if (!popup) {
-    throw new Error('No se pudo abrir la ventana emergente (pop-up bloqueado). Permite pop-ups para este sitio.');
+function attachNonEnumerableWindowRef(target: Record<string, unknown>, win: Window): void {
+  const existing = Object.getOwnPropertyDescriptor(target, 'windowRef');
+  if (existing?.configurable) {
+    Reflect.deleteProperty(target, 'windowRef');
   }
-  return { extras: { windowRef: popup }, popupToClose: popup };
+  Object.defineProperty(target, 'windowRef', {
+    value: win,
+    enumerable: false,
+    configurable: true,
+  });
+}
+
+function checkoutLogPayload(req: Record<string, unknown>): Record<string, unknown> {
+  const logReq = { ...req };
+  const desc = Object.getOwnPropertyDescriptor(req, 'windowRef');
+  if (desc?.value && typeof Window !== 'undefined') {
+    try {
+      if (desc.value instanceof Window) {
+        logReq.windowRef = '[Window:popup — propiedad no enumerable]';
+      }
+    } catch {
+      logReq.windowRef = '[Window]';
+    }
+  }
+  return logReq;
+}
+
+type CheckoutWindowRefMode = 'omit' | 'popup';
+
+async function invokeVsdkCheckout(
+  sdkReq: Record<string, unknown>,
+  windowRefMode: CheckoutWindowRefMode,
+): Promise<Record<string, unknown>> {
+  const V = window.VSDK;
+  if (!V) throw new Error('VSDK no cargado');
+
+  let popupToClose: Window | null = null;
+  if (windowRefMode === 'popup') {
+    const popup = openUctpCheckoutPopup();
+    if (!popup) {
+      throw new Error('No se pudo abrir la ventana emergente (pop-up bloqueado). Permite pop-ups para este sitio.');
+    }
+    popupToClose = popup;
+    attachNonEnumerableWindowRef(sdkReq, popup);
+  }
+
+  try {
+    return (await V.checkout(sdkReq)) as Record<string, unknown>;
+  } finally {
+    tryCloseCheckoutPopup(popupToClose);
+  }
 }
 
 function tryCloseCheckoutPopup(popup: Window | null): void {
@@ -1115,8 +1172,7 @@ function setLastCheckoutPanel(method: string, res: unknown, err?: string): void 
 }
 
 async function runCheckout(srcDigitalCardId: string): Promise<void> {
-  const V = window.VSDK;
-  if (!V || !initialized.value) return;
+  if (!window.VSDK || !initialized.value) return;
   checkingOut.value = true;
   lastCheckoutDisplay.value = null;
   const req: Record<string, unknown> = {
@@ -1124,27 +1180,22 @@ async function runCheckout(srcDigitalCardId: string): Promise<void> {
     dpaTransactionOptions: buildDpaTransactionOptions(),
     payloadTypeIndicatorCheckout: payloadTypeIndicatorCheckout.value,
   };
-  let popupToClose: Window | null = null;
+  const windowRefMode: CheckoutWindowRefMode = checkoutUseWindowRefPopup.value ? 'popup' : 'omit';
   try {
-    const { extras, popupToClose: p } = resolveCheckoutWindowRef();
-    popupToClose = p;
-    Object.assign(req, extras);
-    const res = await V.checkout(req);
-    pushLog('checkout', { ...req }, res);
+    const res = await invokeVsdkCheckout(req, windowRefMode);
+    pushLog('checkout', checkoutLogPayload(req), res);
     setLastCheckoutPanel('checkout', res);
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
-    pushLog('checkout', { ...req }, undefined, msg);
+    pushLog('checkout', checkoutLogPayload(req), undefined, msg);
     setLastCheckoutPanel('checkout', null, msg);
   } finally {
-    tryCloseCheckoutPopup(popupToClose);
     checkingOut.value = false;
   }
 }
 
 async function runCheckoutAddCard(): Promise<void> {
-  const V = window.VSDK;
-  if (!V || !initialized.value) return;
+  if (!window.VSDK || !initialized.value) return;
   checkingOut.value = true;
   lastCheckoutDisplay.value = null;
   const req: Record<string, unknown> = {
@@ -1152,20 +1203,15 @@ async function runCheckoutAddCard(): Promise<void> {
     dpaTransactionOptions: buildDpaTransactionOptions(),
     payloadTypeIndicatorCheckout: payloadTypeIndicatorCheckout.value,
   };
-  let popupToClose: Window | null = null;
   try {
-    const { extras, popupToClose: p } = resolveCheckoutWindowRef();
-    popupToClose = p;
-    Object.assign(req, extras);
-    const res = await V.checkout(req);
-    pushLog('checkout (ADD_CARD / encryptedCard)', { ...req }, res);
+    const res = await invokeVsdkCheckout(req, 'popup');
+    pushLog('checkout (ADD_CARD / encryptedCard)', checkoutLogPayload(req), res);
     setLastCheckoutPanel('checkout (ADD_CARD / encryptedCard)', res);
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
-    pushLog('checkout (ADD_CARD / encryptedCard)', { ...req }, undefined, msg);
+    pushLog('checkout (ADD_CARD / encryptedCard)', checkoutLogPayload(req), undefined, msg);
     setLastCheckoutPanel('checkout (ADD_CARD / encryptedCard)', null, msg);
   } finally {
-    tryCloseCheckoutPopup(popupToClose);
     checkingOut.value = false;
   }
 }
