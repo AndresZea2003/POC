@@ -1,8 +1,7 @@
 <!--
-  Unified Click to Pay (Cybersource UCTP + modo legacy Visa DPA POC).
+  Unified Click to Pay (Cybersource UCTP POC).
   Cybersource: https://developer.cybersource.com/docs/cybs/en-us/unified-click-to-pay/developer/all/rest/unified-click-to-pay/uctp-integration-details/uctp-cs-setup.html
   Env: PUBLIC_VISA_UCTP_CLIENT_LIBRARY, PUBLIC_VISA_UCTP_CLIENT_LIBRARY_INTEGRITY, PUBLIC_VISA_UCTP_CAPTURE_CONTEXT;
-  legacy: PUBLIC_VISA_UCTP_DPA_ID, PUBLIC_VISA_UCTP_CARD_BRANDS, PUBLIC_VISA_UCTP_DPA_CLIENT_ID, PUBLIC_VISA_UCTP_USE_PRODUCTION
 -->
 <template>
   <div class="mx-auto max-w-6xl space-y-6">
@@ -13,7 +12,7 @@
       {{ configWarning }}
     </p>
     <p
-      v-if="sdkLoadMode === 'cybersource' && uctpJwtPayloadWarning"
+      v-if="uctpJwtPayloadWarning"
       class="rounded-lg border border-amber-600/40 bg-amber-950/40 px-4 py-3 text-sm text-amber-100/95"
     >
       {{ uctpJwtPayloadWarning }}
@@ -28,20 +27,9 @@
         <code class="text-slate-400">clientLibraryIntegrity</code> del JSON de
         <code class="text-slate-400">POST …/uctp/v1/sessions</code>, más el JWT de esa <strong>misma</strong> respuesta.
         Mezclar un JWT de otro request o de otro producto (Flex/CTP) suele provocar fallos internos del SDK
-        (<code class="text-slate-400">reading 'find'</code>, etc.). El modo «Visa Checkout Widget» es el POC alterno por URL con DPA.
+        (<code class="text-slate-400">reading 'find'</code>, etc.).
       </p>
-      <div class="mb-4 flex flex-wrap gap-x-6 gap-y-2 text-sm">
-        <label class="flex cursor-pointer items-center gap-2">
-          <input v-model="sdkLoadMode" type="radio" value="cybersource" class="border-slate-600" />
-          <span class="text-slate-300">Cybersource (clientLibrary + capture context)</span>
-        </label>
-        <label class="flex cursor-pointer items-center gap-2">
-          <input v-model="sdkLoadMode" type="radio" value="visa_dpa" class="border-slate-600" />
-          <span class="text-slate-300">Visa Checkout Widget (legacy, DPA en URL)</span>
-        </label>
-      </div>
-
-      <div v-if="sdkLoadMode === 'cybersource'" class="grid gap-4 md:grid-cols-2">
+      <div class="grid gap-4 md:grid-cols-2">
         <label class="block text-sm md:col-span-2">
           <span class="text-slate-400">clientLibrary (URL del script)</span>
           <input
@@ -83,9 +71,9 @@
           </li>
           <li>
             <code class="text-slate-400">initialize()</code> recibe
-            <code class="text-slate-400">header</code>, <code class="text-slate-400">payload</code> y
-            <code class="text-slate-400">raw</code> como parámetros raíz directos (spec CyberSource); no van
-            anidados bajo ninguna propiedad.
+            <code class="text-slate-400">header</code>, <code class="text-slate-400">payload</code> (objeto JSON con
+            <code class="text-slate-400">ctx</code>) y <code class="text-slate-400">raw</code> en la raíz; el SDK v0.6.0
+            usa <code class="text-slate-400">payload.ctx.find(...)</code> y falla si payload es solo string.
           </li>
         </ul>
         <label class="flex items-start gap-2 text-sm md:col-span-2">
@@ -94,42 +82,6 @@
             Incluir <code class="text-slate-300">dpaTransactionOptions</code> en
             <code class="text-slate-300">initialize()</code> (opcional según spec; por defecto no se envía).
           </span>
-        </label>
-      </div>
-
-      <div v-else class="grid gap-4 md:grid-cols-2">
-        <label class="block text-sm">
-          <span class="text-slate-400">DPA ID</span>
-          <input
-            v-model="dpaIdInput"
-            type="text"
-            class="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-3 py-2 text-slate-100"
-            placeholder="Desde registro Visa / .env"
-          />
-        </label>
-        <label class="block text-sm">
-          <span class="text-slate-400">Card brands (multiselect)</span>
-          <select
-            v-model="selectedCardBrands"
-            multiple
-            class="mt-1 min-h-24 w-full rounded border border-slate-600 bg-slate-900 px-3 py-2 text-slate-100"
-          >
-            <option v-for="brand in CARD_BRAND_OPTIONS" :key="brand" :value="brand">
-              {{ brand }}
-            </option>
-          </select>
-        </label>
-        <label class="block text-sm md:col-span-2">
-          <span class="text-slate-400">DPA Client ID (opcional, partner multi-merchant)</span>
-          <input
-            v-model="dpaClientIdInput"
-            type="text"
-            class="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-3 py-2 text-slate-100"
-          />
-        </label>
-        <label class="flex items-center gap-2 text-sm md:col-span-2">
-          <input v-model="useProduction" type="checkbox" class="rounded border-slate-600" />
-          <span class="text-slate-300">Usar URL de producción del SDK (sin sandbox)</span>
         </label>
       </div>
 
@@ -446,31 +398,16 @@ import { ref, computed, watch } from 'vue';
 
 const env = import.meta.env;
 
-/** DPA de ejemplo en documentación Visa sandbox (puedes sobrescribir con PUBLIC_VISA_UCTP_DPA_ID). */
-const DEFAULT_DPA_ID = 'JRG47J3KFNIQ7ASQN5DB21NO7TV3uh8_vx1lvzm7Kh8jQahhw';
 const DEFAULT_EMAIL = 'juanpapabon@gmail.com';
-const CARD_BRAND_OPTIONS = ['visa', 'mastercard', 'amex', 'discover'] as const;
 const CURRENCY_OPTIONS = ['USD', 'EUR', 'COP', 'MXN', 'AUD'] as const;
 const DEFAULT_AMOUNT_BY_CURRENCY: Record<string, string> = {
   USD: '99.95',
   EUR: '89.95',
-  COP: '400000',
+  COP: '20000',
   MXN: '1800',
   AUD: '149.95',
 };
 
-const dpaIdInput = ref(env.PUBLIC_VISA_UCTP_DPA_ID?.trim() || DEFAULT_DPA_ID);
-const selectedCardBrands = ref<string[]>(
-  (env.PUBLIC_VISA_UCTP_CARD_BRANDS ?? 'visa,mastercard')
-    .split(',')
-    .map((v) => v.trim().toLowerCase())
-    .filter((v) => CARD_BRAND_OPTIONS.includes(v as (typeof CARD_BRAND_OPTIONS)[number])),
-);
-const dpaClientIdInput = ref(env.PUBLIC_VISA_UCTP_DPA_CLIENT_ID ?? '');
-const useProduction = ref(env.PUBLIC_VISA_UCTP_USE_PRODUCTION === 'true');
-
-type SdkLoadMode = 'cybersource' | 'visa_dpa';
-const sdkLoadMode = ref<SdkLoadMode>('cybersource');
 const clientLibraryUrl = ref((env.PUBLIC_VISA_UCTP_CLIENT_LIBRARY ?? '').trim());
 const clientLibraryIntegrity = ref((env.PUBLIC_VISA_UCTP_CLIENT_LIBRARY_INTEGRITY ?? '').trim());
 const captureContextJwt = ref((env.PUBLIC_VISA_UCTP_CAPTURE_CONTEXT ?? '').trim());
@@ -479,8 +416,8 @@ const initializeIncludeDpaOptions = ref(false);
 
 const consumerEmail = ref(DEFAULT_EMAIL);
 const merchantOrderId = ref(typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : String(Date.now()));
-const transactionCurrencyCode = ref('USD');
-const transactionAmount = ref(DEFAULT_AMOUNT_BY_CURRENCY[transactionCurrencyCode.value] ?? '99.95');
+const transactionCurrencyCode = ref('COP');
+const transactionAmount = ref(DEFAULT_AMOUNT_BY_CURRENCY[transactionCurrencyCode.value] ?? '20000');
 
 const loadingSdk = ref(false);
 const sdkReady = ref(false);
@@ -517,31 +454,20 @@ watch(lastCardsResponse, () => {
   failedCardArt.value = {};
 });
 watch(transactionCurrencyCode, (currency) => {
-  transactionAmount.value = DEFAULT_AMOUNT_BY_CURRENCY[currency] ?? '99.95';
+  transactionAmount.value = DEFAULT_AMOUNT_BY_CURRENCY[currency] ?? '20000';
 });
 
 let sdkScriptSrc = '';
 let sdkScriptIntegrity = '';
 
 const configWarning = computed(() => {
-  if (sdkLoadMode.value === 'cybersource') {
-    if (!clientLibraryUrl.value.trim()) {
-      return 'Indica clientLibrary (URL del script) desde la API de sesiones Cybersource o PUBLIC_VISA_UCTP_CLIENT_LIBRARY.';
-    }
-    return '';
+  if (!clientLibraryUrl.value.trim()) {
+    return 'Indica clientLibrary (URL del script) desde la API de sesiones Cybersource o PUBLIC_VISA_UCTP_CLIENT_LIBRARY.';
   }
-  if (!dpaIdInput.value.trim()) {
-    return 'Configura PUBLIC_VISA_UCTP_DPA_ID en .env o introduce DPA ID arriba para cargar el SDK.';
-  }
-  return '';
+  return null;
 });
 
-const canLoadSdk = computed(() => {
-  if (sdkLoadMode.value === 'cybersource') {
-    return Boolean(clientLibraryUrl.value.trim());
-  }
-  return Boolean(dpaIdInput.value.trim() && selectedCardBrands.value.length);
-});
+const canLoadSdk = computed(() => Boolean(clientLibraryUrl.value.trim()));
 
 const vsdk = computed(() => (typeof window !== 'undefined' ? window.VSDK : undefined));
 
@@ -744,6 +670,12 @@ function tryCloseCheckoutPopup(popup: Window | null): void {
 }
 
 function pushLog(method: string, request: unknown, response?: unknown, error?: string) {
+  const consolePayload = { request, response, error };
+  if (error) {
+    console.error(`[UCTP] ${method}`, consolePayload);
+  } else {
+    console.info(`[UCTP] ${method}`, consolePayload);
+  }
   try {
     apiLog.value = [
       {
@@ -768,45 +700,105 @@ function pushLog(method: string, request: unknown, response?: unknown, error?: s
   }
 }
 
-function buildSdkUrl(): string {
-  const dpaId = encodeURIComponent(dpaIdInput.value.trim());
-  const cardBrands = encodeURIComponent(selectedCardBrands.value.join(','));
-  const base = useProduction.value
-    ? 'https://secure.checkout.visa.com/checkout-widget/resources/js/integration/v2/sdk.js'
-    : 'https://sandbox.secure.checkout.visa.com/checkout-widget/resources/js/integration/v2/sdk.js';
-  let url = `${base}?dpaId=${dpaId}&cardBrands=${cardBrands}`;
-  if (dpaClientIdInput.value.trim()) {
-    url += `&dpaClientId=${encodeURIComponent(dpaClientIdInput.value.trim())}`;
-  }
-  return url;
-}
-
 /**
  * Opciones para VSDK checkout/getCards típicos — incluye `paymentOptions`.
- * Para `initialize()` en flujo CyberSource suele mejor **no** incluir paymentOptions para evitar
- * rutas internas que esperan listas desde el JWT (errores tipo «reading 'find'»).
+ * Intenta usar defaults derivados del JWT de capture context para mantener compatibilidad
+ * con la misma sesión generada por backend/integración.
  */
+type DerivedDpaDefaults = {
+  transactionAmount?: { transactionAmount: string; transactionCurrencyCode: string };
+  dpaBillingPreference?: string;
+  dpaAcceptedBillingCountries?: string[];
+  consumerNationalIdentifierRequested?: boolean;
+  merchantCountryCode?: string;
+  dpaLocale?: string;
+  paymentOptions?: Array<Record<string, unknown>>;
+};
+
+const derivedDpaDefaults = ref<DerivedDpaDefaults | null>(null);
+
+function normalizePaymentOptions(raw: unknown): Array<Record<string, unknown>> | undefined {
+  if (!raw) return undefined;
+  if (Array.isArray(raw)) {
+    return raw.filter((entry): entry is Record<string, unknown> => Boolean(entry && typeof entry === 'object'));
+  }
+  if (typeof raw === 'object') {
+    return [raw as Record<string, unknown>];
+  }
+  return undefined;
+}
+
+function deriveDpaDefaultsFromDecodedPayload(payload: Record<string, unknown>): DerivedDpaDefaults | null {
+  try {
+    const parsed = payload;
+    const ctx = Array.isArray(parsed.ctx) ? parsed.ctx : [];
+    const first = (ctx[0] ?? {}) as Record<string, unknown>;
+    const data = (first.data ?? {}) as Record<string, unknown>;
+    const paymentConfigurations = (data.paymentConfigurations ?? {}) as Record<string, unknown>;
+    const preferredOrder = ['SRCVISA', 'SRCMASTERCARD'];
+    let selected: Record<string, unknown> | null = null;
+    for (const network of preferredOrder) {
+      const cfg = paymentConfigurations[network];
+      if (cfg && typeof cfg === 'object') {
+        selected = cfg as Record<string, unknown>;
+        break;
+      }
+    }
+    if (!selected) return null;
+    const parameters = (selected.parameters ?? {}) as Record<string, unknown>;
+    const dto = (parameters.dpaTransactionOptions ?? {}) as Record<string, unknown>;
+    const transactionAmountRaw = dto.transactionAmount as Record<string, unknown> | undefined;
+    const amount =
+      transactionAmountRaw &&
+      typeof transactionAmountRaw.transactionAmount === 'string' &&
+      typeof transactionAmountRaw.transactionCurrencyCode === 'string'
+        ? {
+            transactionAmount: transactionAmountRaw.transactionAmount,
+            transactionCurrencyCode: transactionAmountRaw.transactionCurrencyCode,
+          }
+        : undefined;
+
+    return {
+      transactionAmount: amount,
+      dpaBillingPreference: typeof dto.dpaBillingPreference === 'string' ? dto.dpaBillingPreference : undefined,
+      dpaAcceptedBillingCountries: Array.isArray(dto.dpaAcceptedBillingCountries)
+        ? dto.dpaAcceptedBillingCountries.filter((x): x is string => typeof x === 'string')
+        : undefined,
+      consumerNationalIdentifierRequested:
+        typeof dto.consumerNationalIdentifierRequested === 'boolean' ? dto.consumerNationalIdentifierRequested : undefined,
+      merchantCountryCode: typeof dto.merchantCountryCode === 'string' ? dto.merchantCountryCode : undefined,
+      dpaLocale: typeof dto.dpaLocale === 'string' ? dto.dpaLocale : undefined,
+      paymentOptions: normalizePaymentOptions(dto.paymentOptions),
+    };
+  } catch {
+    return null;
+  }
+}
+
 function buildDpaTransactionOptions(includePaymentOptions = true): Record<string, unknown> {
+  const defaults = derivedDpaDefaults.value;
   const options: Record<string, unknown> = {
-    transactionAmount: {
-      transactionAmount: transactionAmount.value,
-      transactionCurrencyCode: transactionCurrencyCode.value,
-    },
-    dpaBillingPreference: 'NONE',
-    dpaAcceptedBillingCountries: ['US', 'CA'],
-    consumerNationalIdentifierRequested: false,
+    transactionAmount:
+      defaults?.transactionAmount ?? {
+        transactionAmount: transactionAmount.value,
+        transactionCurrencyCode: transactionCurrencyCode.value,
+      },
+    dpaBillingPreference: defaults?.dpaBillingPreference ?? 'NONE',
+    dpaAcceptedBillingCountries: defaults?.dpaAcceptedBillingCountries ?? [],
+    consumerNationalIdentifierRequested: defaults?.consumerNationalIdentifierRequested ?? false,
     merchantCategoryCode: '4829',
-    merchantCountryCode: 'US',
+    merchantCountryCode: defaults?.merchantCountryCode ?? 'CO',
     merchantOrderId: merchantOrderId.value,
-    dpaLocale: 'en_US',
+    dpaLocale: defaults?.dpaLocale ?? 'es_CO',
   };
   if (includePaymentOptions) {
-    options.paymentOptions = [
-      {
-        dpaDynamicDataTtlMinutes: 2,
-        dynamicDataType: 'CARD_APPLICATION_CRYPTOGRAM_LONG_FORM',
-      },
-    ];
+    options.paymentOptions =
+      defaults?.paymentOptions ?? [
+        {
+          dpaDynamicDataTtlMinutes: 15,
+          dynamicDataType: 'CARD_APPLICATION_CRYPTOGRAM_LONG_FORM',
+        },
+      ];
   }
   return options;
 }
@@ -829,20 +821,37 @@ function decodeJwtSegment(segment: string): string {
   return new TextDecoder('utf-8').decode(bytes);
 }
 
+function parseJwtSegmentJson(segment: string, segmentName: string): Record<string, unknown> {
+  const utf8 = decodeJwtSegment(segment);
+  try {
+    const parsed = JSON.parse(utf8) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      throw new Error(`se esperaba un objeto JSON en ${segmentName}`);
+    }
+    return parsed as Record<string, unknown>;
+  } catch (e: unknown) {
+    const hint = e instanceof Error ? e.message : String(e);
+    throw new Error(`Error parseando ${segmentName} del JWT: ${hint}`);
+  }
+}
+
 /**
- * Segmentos JWT 1 y 2 decodificados base64url → UTF-8; `raw` es el JWT completo (syntax CyberSource captureContext).
+ * JWT → header/payload como objetos (SDK UCTP v0.6.0 usa payload.ctx.find) + raw string.
  */
-function buildCybersourceInitializeFromJwt(trimmedJwt: string): { header: string; payload: string; raw: string } {
+function buildCybersourceInitializeFromJwt(trimmedJwt: string): {
+  header: Record<string, unknown>;
+  payload: Record<string, unknown>;
+  raw: string;
+} {
   const parts = trimmedJwt.split('.').filter(Boolean);
   if (parts.length < 3) {
     throw new Error(`JWT inválido: esperados al menos 3 segmentos (.), encontrados ${parts.length}.`);
   }
-  const raw = trimmedJwt;
   try {
     return {
-      header: decodeJwtSegment(parts[0]),
-      payload: decodeJwtSegment(parts[1]),
-      raw,
+      header: parseJwtSegmentJson(parts[0], 'header'),
+      payload: parseJwtSegmentJson(parts[1], 'payload'),
+      raw: trimmedJwt,
     };
   } catch (e: unknown) {
     const hint = e instanceof Error ? e.message : String(e);
@@ -850,14 +859,9 @@ function buildCybersourceInitializeFromJwt(trimmedJwt: string): { header: string
   }
 }
 
-/** Valida payload decodificado (UTF‑8) del JWT de capture context venido de POST `/uctp/v1/sessions`. Vacío ⇒ OK. */
-function validateUctpSessionsCaptureJwtDecodedPayload(payloadUtf8Json: string): string {
-  let o: Record<string, unknown>;
-  try {
-    o = JSON.parse(payloadUtf8Json) as Record<string, unknown>;
-  } catch {
-    return 'El payload del JWT no es JSON válido tras base64url → UTF‑8.';
-  }
+/** Valida payload parseado del JWT de capture context (`POST /uctp/v1/sessions`). Vacío ⇒ OK. */
+function validateUctpSessionsCaptureJwtDecodedPayload(payload: Record<string, unknown>): string {
+  const o = payload;
   if (!Object.prototype.hasOwnProperty.call(o, 'ctx')) {
     return 'Falta `ctx` en el payload JSON. Suele aparecer «reading \'ctx\'» en initialize() si pegas otro JWT (p. ej. Microform/Flex, token de campo equivocado del JSON). Usa literalmente el capture context JWT de esa misma respuesta `/uctp/v1/sessions`.';
   }
@@ -872,14 +876,13 @@ function validateUctpSessionsCaptureJwtDecodedPayload(payloadUtf8Json: string): 
 }
 
 const uctpJwtPayloadWarning = computed((): string => {
-  if (sdkLoadMode.value !== 'cybersource') return '';
   const jwt = captureContextJwt.value.trim();
   if (!jwt) return '';
   const parts = jwt.split('.').filter(Boolean);
   if (parts.length < 3) return 'El JWT debería tener 3 segmentos separados por puntos.';
   try {
-    const payloadStr = decodeJwtSegment(parts[1]);
-    return validateUctpSessionsCaptureJwtDecodedPayload(payloadStr);
+    const payload = parseJwtSegmentJson(parts[1], 'payload');
+    return validateUctpSessionsCaptureJwtDecodedPayload(payload);
   } catch {
     return '';
   }
@@ -887,74 +890,15 @@ const uctpJwtPayloadWarning = computed((): string => {
 
 function loadSdk(): void {
   if (!canLoadSdk.value || loadingSdk.value) return;
-
-  if (sdkLoadMode.value === 'cybersource') {
-    const url = clientLibraryUrl.value.trim();
-    const integrity = clientLibraryIntegrity.value.trim();
-    if (sdkScriptSrc === url && sdkScriptIntegrity === integrity && window.VSDK) {
-      sdkReady.value = true;
-      return;
-    }
-    loadingSdk.value = true;
-    sdkScriptSrc = url;
-    sdkScriptIntegrity = integrity;
-    const existing = document.querySelector(`script[data-visa-uctp-sdk="1"]`);
-    if (existing) existing.remove();
-    delete window.VSDK;
-    sdkReady.value = false;
-    initialized.value = false;
-
-    const script = document.createElement('script');
-    script.src = url;
-    script.async = true;
-    script.crossOrigin = 'anonymous';
-    if (integrity) {
-      script.integrity = integrity;
-    }
-    script.dataset.visaUctpSdk = '1';
-    script.onload = () => {
-      loadingSdk.value = false;
-      sdkReady.value = Boolean(window.VSDK);
-      if (!window.VSDK) {
-        pushLog(
-          'loadSdk',
-          {
-            url,
-            integritySet: Boolean(integrity),
-            note: 'JWT + esta URL (+ integrity): misma respuesta POST /uctp/v1/sessions; script y contexto sin mezclar sesiones.',
-          },
-          undefined,
-          'VSDK no disponible tras cargar el script',
-        );
-      } else {
-        pushLog(
-          'loadSdk',
-          {
-            url,
-            integritySet: Boolean(integrity),
-            note: 'Empareja esta URL con JWT y integrity de la misma respuesta POST /uctp/v1/sessions.',
-          },
-          { ok: true, note: 'window.VSDK listo' },
-        );
-      }
-    };
-    script.onerror = () => {
-      loadingSdk.value = false;
-      sdkReady.value = false;
-      pushLog('loadSdk', { url, integritySet: Boolean(integrity) }, undefined, 'Error cargando script SDK');
-    };
-    document.head.appendChild(script);
-    return;
-  }
-
-  const url = buildSdkUrl();
-  if (sdkScriptSrc === url && sdkScriptIntegrity === '' && window.VSDK) {
+  const url = clientLibraryUrl.value.trim();
+  const integrity = clientLibraryIntegrity.value.trim();
+  if (sdkScriptSrc === url && sdkScriptIntegrity === integrity && window.VSDK) {
     sdkReady.value = true;
     return;
   }
   loadingSdk.value = true;
   sdkScriptSrc = url;
-  sdkScriptIntegrity = '';
+  sdkScriptIntegrity = integrity;
   const existing = document.querySelector(`script[data-visa-uctp-sdk="1"]`);
   if (existing) existing.remove();
   delete window.VSDK;
@@ -964,17 +908,41 @@ function loadSdk(): void {
   const script = document.createElement('script');
   script.src = url;
   script.async = true;
+  script.crossOrigin = 'anonymous';
+  if (integrity) {
+    script.integrity = integrity;
+  }
   script.dataset.visaUctpSdk = '1';
   script.onload = () => {
     loadingSdk.value = false;
     sdkReady.value = Boolean(window.VSDK);
-    if (!window.VSDK) pushLog('loadSdk', { url }, undefined, 'VSDK no disponible tras cargar el script');
-    else pushLog('loadSdk', { url }, { ok: true, note: 'window.VSDK listo' });
+    if (!window.VSDK) {
+      pushLog(
+        'loadSdk',
+        {
+          url,
+          integritySet: Boolean(integrity),
+          note: 'JWT + esta URL (+ integrity): misma respuesta POST /uctp/v1/sessions; script y contexto sin mezclar sesiones.',
+        },
+        undefined,
+        'VSDK no disponible tras cargar el script',
+      );
+    } else {
+      pushLog(
+        'loadSdk',
+        {
+          url,
+          integritySet: Boolean(integrity),
+          note: 'Empareja esta URL con JWT y integrity de la misma respuesta POST /uctp/v1/sessions.',
+        },
+        { ok: true, note: 'window.VSDK listo' },
+      );
+    }
   };
   script.onerror = () => {
     loadingSdk.value = false;
     sdkReady.value = false;
-    pushLog('loadSdk', { url }, undefined, 'Error cargando script SDK');
+    pushLog('loadSdk', { url, integritySet: Boolean(integrity) }, undefined, 'Error cargando script SDK');
   };
   document.head.appendChild(script);
 }
@@ -984,81 +952,61 @@ async function runInitialize(): Promise<void> {
   if (!V) return;
   initializing.value = true;
 
-  if (sdkLoadMode.value === 'cybersource') {
-    const jwt = captureContextJwt.value.trim();
-    if (!jwt) {
-      initializing.value = false;
-      const msg = 'Falta el JWT de capture context (textarea o PUBLIC_VISA_UCTP_CAPTURE_CONTEXT).';
-      pushLog('initialize', { mode: 'cybersource' }, undefined, msg);
-      return;
-    }
-    let initParts: { header: string; payload: string; raw: string };
-    try {
-      initParts = buildCybersourceInitializeFromJwt(jwt);
-    } catch (e: unknown) {
-      initializing.value = false;
-      const msg = e instanceof Error ? e.message : String(e);
-      pushLog('initialize', { mode: 'cybersource', parseError: true }, undefined, msg);
-      return;
-    }
-    const core = {
-      header: initParts.header,
-      payload: initParts.payload,
-      raw: initParts.raw,
-    };
-    const payloadShapeError = validateUctpSessionsCaptureJwtDecodedPayload(initParts.payload);
-    if (payloadShapeError) {
-      initializing.value = false;
-      pushLog(
-        'initialize',
-        {
-          mode: 'cybersource',
-          abortedBeforeSdkCall: true,
-          reason: 'capture_context_payload_shape',
-          shapeHint: 'El JWT UCTP válido lleva payload.ctx como arreglo (doc. extractPanEncryptionKeys / initialize).',
-        },
-        undefined,
-        payloadShapeError,
-      );
-      return;
-    }
-    /** Spec CyberSource: header, payload, raw son parámetros raíz directos (no anidados bajo captureContext). */
-    const req: Record<string, unknown> = { ...core };
-    if (initializeIncludeDpaOptions.value) {
-      req.dpaTransactionOptions = buildDpaTransactionOptions(false);
-    }
-    const logSafe: Record<string, unknown> = {
-      header: '[redacted]',
-      payload: '[redacted]',
-      raw: '[JWT redacted]',
-      pairingReminder: 'JWT + clientLibrary (+ integrity) del mismo POST /uctp/v1/sessions',
-    };
-    if (initializeIncludeDpaOptions.value) {
-      logSafe.dpaTransactionOptions = req.dpaTransactionOptions;
-    }
-    try {
-      await V.initialize(req);
-      initialized.value = true;
-      pushLog('initialize', logSafe, { ok: true });
-    } catch (e: unknown) {
-      initialized.value = false;
-      const msg = e instanceof Error ? e.message : String(e);
-      pushLog('initialize', logSafe, undefined, msg);
-    } finally {
-      initializing.value = false;
-    }
+  const jwt = captureContextJwt.value.trim();
+  if (!jwt) {
+    initializing.value = false;
+    const msg = 'Falta el JWT de capture context (textarea o PUBLIC_VISA_UCTP_CAPTURE_CONTEXT).';
+    pushLog('initialize', {}, undefined, msg);
     return;
   }
-
-  const req = { dpaTransactionOptions: buildDpaTransactionOptions() };
+  let initParts: { header: Record<string, unknown>; payload: Record<string, unknown>; raw: string };
   try {
-    await V.initialize(req);
+    initParts = buildCybersourceInitializeFromJwt(jwt);
+  } catch (e: unknown) {
+    initializing.value = false;
+    const msg = e instanceof Error ? e.message : String(e);
+    pushLog('initialize', { parseError: true }, undefined, msg);
+    return;
+  }
+  const core = {
+    header: initParts.header,
+    payload: initParts.payload,
+    raw: initParts.raw,
+  };
+  const payloadShapeError = validateUctpSessionsCaptureJwtDecodedPayload(initParts.payload);
+  if (payloadShapeError) {
+    initializing.value = false;
+    pushLog(
+      'initialize',
+      {
+        abortedBeforeSdkCall: true,
+        reason: 'capture_context_payload_shape',
+        shapeHint: 'El JWT UCTP válido lleva payload.ctx como arreglo (doc. extractPanEncryptionKeys / initialize).',
+      },
+      undefined,
+      payloadShapeError,
+    );
+    return;
+  }
+  derivedDpaDefaults.value = deriveDpaDefaultsFromDecodedPayload(initParts.payload);
+  const initOptions = initializeIncludeDpaOptions.value
+    ? { dpaTransactionOptions: buildDpaTransactionOptions(false) }
+    : undefined;
+  const logRequest: Record<string, unknown> = {
+    ...core,
+    ...(initOptions ?? {}),
+    pairingReminder: 'JWT + clientLibrary (+ integrity) del mismo POST /uctp/v1/sessions',
+    defaultsFromJwt: Boolean(derivedDpaDefaults.value),
+    payloadParsedAsObject: true,
+  };
+  try {
+    await V.initialize(core, initOptions);
     initialized.value = true;
-    pushLog('initialize', req, { ok: true });
+    pushLog('initialize', logRequest, { ok: true });
   } catch (e: unknown) {
     initialized.value = false;
     const msg = e instanceof Error ? e.message : String(e);
-    pushLog('initialize', req, undefined, msg);
+    pushLog('initialize', logRequest, undefined, msg);
   } finally {
     initializing.value = false;
   }
