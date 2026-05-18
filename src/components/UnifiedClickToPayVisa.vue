@@ -361,6 +361,8 @@
       <p class="mb-3 text-sm text-slate-400">
         Completa el formulario y pulsa <strong class="text-orange-200">Cifrar y hacer checkout()</strong>.
         El enrolamiento usa pop-up con <code class="text-orange-200">windowRef</code> no enumerable.
+        Si el checkout falla, esa ventana puede quedar abierta: ciérrala antes de volver a intentar
+        (<code class="text-slate-400">window.open</code> reutiliza el mismo nombre de ventana).
       </p>
 
       <div class="mb-3 flex flex-wrap items-center gap-2">
@@ -866,9 +868,13 @@ async function invokeVsdkCheckout(
   }
 
   try {
-    return (await V.checkout(sdkReq)) as Record<string, unknown>;
-  } finally {
+    const res = (await V.checkout(sdkReq)) as Record<string, unknown>;
+    // Cerrar solo en éxito: si cerramos tras reject, el iframe/comunicador puede seguir en vuelo
+    // → Failed to fetch, pop-up vacío al instante, errores en cadena tipo SDK_NOT_INITIALIZED.
     tryCloseCheckoutPopup(popupToClose);
+    return res;
+  } catch (e: unknown) {
+    throw e;
   }
 }
 
