@@ -332,12 +332,19 @@
       </label>
     </section>
 
-    <!-- ADD_CARD -->
+    <!-- ADD_CARD / enrolamiento nueva tarjeta (siempre visible tras initialize(); combina con lista SUCCESS). -->
     <section
-      v-if="lastActionCode === 'ADD_CARD'"
+      v-if="showAddCardEnrollmentSection"
       class="rounded-xl border border-orange-600/50 bg-orange-950/20 p-4 md:p-6"
     >
-      <h2 class="mb-2 text-sm font-semibold text-orange-300">Alta de tarjeta (ADD_CARD)</h2>
+      <h2 class="mb-2 text-sm font-semibold text-orange-300">Alta de tarjeta (encryptedCard)</h2>
+      <p
+        v-if="getCardsEnrollmentAddCardHint && lastCardsResponse"
+        class="mb-3 rounded-lg border border-cyan-600/35 bg-cyan-950/30 px-3 py-2 text-sm text-cyan-100/95"
+      >
+        <strong>getCards()</strong> indica enrolamiento: perfil nuevo o sin tarjetas en Click to Pay
+        (<code class="text-cyan-200">ADD_CARD</code>). Usa el formulario siguiente; no es un error técnico del SDK.
+      </p>
       <p class="mb-2 text-xs text-slate-500">
         Los datos sensibles se cifran en el navegador (Web Crypto: RSA-OAEP-256 + A256GCM) con la
         <code class="text-slate-400">panEncryptionKey</code> del JWT de sesiones.
@@ -461,9 +468,9 @@
       </button>
     </section>
 
-    <!-- ERROR from getCards -->
+    <!-- ERROR from getCards (excluye respuesta esperada enrolamiento ADD_CARD como ERROR). -->
     <section
-      v-if="lastActionCode === 'ERROR'"
+      v-if="lastActionCode === 'ERROR' && !getCardsEnrollmentAddCardHint"
       class="rounded-xl border border-red-600/50 bg-red-950/20 p-4 md:p-6"
     >
       <h2 class="mb-2 text-sm font-semibold text-red-300">Error en getCards</h2>
@@ -608,6 +615,22 @@ const lastActionCode = computed(() => {
   if (!r || typeof r.actionCode !== 'string') return null;
   return r.actionCode;
 });
+
+/** Perfil nuevo / sin tarjetas C2P: getCards devuelve ADD_CARD o ERROR con error ADD_CARD — no es fallo técnico. */
+const getCardsEnrollmentAddCardHint = computed((): boolean => {
+  const r = lastCardsResponse.value;
+  if (!r || typeof r.actionCode !== 'string') return false;
+  if (r.actionCode === 'ADD_CARD') return true;
+  if (r.actionCode === 'ERROR') {
+    const e = r.error;
+    if (typeof e !== 'string') return false;
+    return e === 'ADD_CARD' || e.toUpperCase() === 'ADD_CARD';
+  }
+  return false;
+});
+
+/** Alta de tarjeta (PAN → JWE) visible tras initialize(); la lista SUCCESS puede coexistir. */
+const showAddCardEnrollmentSection = computed(() => initialized.value);
 
 const maskedValidationChannel = computed(() => {
   const r = lastCardsResponse.value;
