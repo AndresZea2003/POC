@@ -452,6 +452,22 @@
         />
       </label>
 
+      <details class="mt-4 rounded-lg border border-slate-700/80 bg-slate-900/50 px-3 py-2">
+        <summary class="cursor-pointer text-xs font-medium text-slate-400">Opcional: complianceSettings (JSON)</summary>
+        <p class="mt-2 text-[11px] text-slate-500">
+          Si el Business Center exige aceptación de términos, pega aquí el objeto con
+          <code class="text-slate-400">complianceResources</code> (ver API Checkout — ComplianceSettings). Si aparece
+          <code class="text-amber-200">CARD_ADD_FAILED</code>, suele bastar pasar también
+          <code class="text-slate-400">consumer</code>; si no, configurar compliance en Cybersource o este JSON de prueba.
+        </p>
+        <textarea
+          v-model="addCardComplianceSettingsJson"
+          rows="5"
+          class="mt-2 w-full rounded border border-slate-600 bg-slate-950 px-2 py-1.5 font-mono text-[11px] text-slate-300"
+          placeholder='{"complianceResources":[{"complianceType":"TERMS_AND_CONDITIONS","uri":"https://...","version":"1"}]}'
+        />
+      </details>
+
       <button
         type="button"
         class="mt-3 rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-500 disabled:opacity-50"
@@ -568,6 +584,8 @@ const newCardCvv = ref('');
 const newCardName = ref('');
 const buildingJwe = ref(false);
 const jweError = ref('');
+/** JSON opcional para checkout().complianceSettings (TERMS_AND_CONDITIONS, PRIVACY_POLICY, …). */
+const addCardComplianceSettingsJson = ref('');
 const payloadTypeIndicatorCheckout = ref<'FULL' | 'SUMMARY'>('FULL');
 /** Pop-up + windowRef solo si el flujo lo exige (p. ej. CVM); por defecto off en tarjeta guardada. */
 const checkoutUseWindowRefPopup = ref(false);
@@ -1031,6 +1049,38 @@ function buildConsumerIdentity(): Record<string, unknown> {
     identityType: 'EMAIL_ADDRESS',
     identityValue: consumerEmail.value.trim(),
   };
+}
+
+/** Consumer en checkout(encryptedCard): debe enlazar la misma identidad que en getCards() (CyberSource Checkout API). */
+function buildCheckoutConsumerForEncryptedCard(): Record<string, unknown> {
+  const email = consumerEmail.value.trim();
+  if (!email) {
+    throw new Error('Indica el email (consumer identity) antes del checkout de alta de tarjeta.');
+  }
+  return {
+    consumerIdentity: buildConsumerIdentity(),
+    emailAddress: email,
+  };
+}
+
+/** complianceSettings opcional desde JSON (URLs de términos/privacidad del Business Center). */
+function parseOptionalCheckoutComplianceJson(): Record<string, unknown> | undefined {
+  const raw = addCardComplianceSettingsJson.value.trim();
+  if (!raw) return undefined;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error('complianceSettings: JSON inválido.');
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('complianceSettings: debe ser un objeto.');
+  }
+  const o = parsed as Record<string, unknown>;
+  if (!Array.isArray(o.complianceResources)) {
+    throw new Error('complianceSettings debe incluir complianceResources[].');
+  }
+  return o;
 }
 
 /** Cybersource UCTP — Client-Side PAN Encryption (RSA-OAEP-256 + A256GCM, RFC 7516). */
@@ -1508,9 +1558,14 @@ async function runCheckoutAddCard(): Promise<void> {
   lastCheckoutDisplay.value = null;
   const req: Record<string, unknown> = {
     encryptedCard: encryptedCardJwe.value.trim(),
+    consumer: buildCheckoutConsumerForEncryptedCard(),
     dpaTransactionOptions: buildDpaTransactionOptions(),
     payloadTypeIndicatorCheckout: payloadTypeIndicatorCheckout.value,
   };
+  const compliance = parseOptionalCheckoutComplianceJson();
+  if (compliance) {
+    req.complianceSettings = compliance;
+  }
   try {
     const res = await invokeVsdkCheckout(req, 'popup');
     pushLog('checkout (ADD_CARD / encryptedCard)', checkoutLogPayload(req), res);
