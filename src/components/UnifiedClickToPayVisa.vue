@@ -338,28 +338,126 @@
       class="rounded-xl border border-orange-600/50 bg-orange-950/20 p-4 md:p-6"
     >
       <h2 class="mb-2 text-sm font-semibold text-orange-300">Alta de tarjeta (ADD_CARD)</h2>
-      <p class="mb-3 text-sm text-slate-400">
-        checkout() requiere <code class="text-orange-200">encryptedCard</code> (JWE) y normalmente consumer/compliance
-        según onboarding. Pega un JWE generado en tu entorno certificado o backend.
+      <p class="mb-2 text-xs text-slate-500">
+        Los datos sensibles se cifran en el navegador (Web Crypto: RSA-OAEP-256 + A256GCM) con la
+        <code class="text-slate-400">panEncryptionKey</code> del JWT de sesiones.
+        Ver
+        <a
+          class="text-sky-400 underline"
+          href="https://developer.cybersource.com/docs/cybs/en-us/unified-click-to-pay/developer/all/rest/unified-click-to-pay/uctp-appendix-intro/uctp-keys/uctp-keys-pan-enc-keys.html"
+          target="_blank"
+          rel="noopener noreferrer"
+        >Client-Side PAN Encryption Keys</a>.
+        Claves cargadas tras <code class="text-slate-400">initialize()</code>:
+        <span class="font-mono text-slate-400">{{ panEncryptionKeysLoadedLabel }}</span>
       </p>
-      <label class="block text-sm">
-        <span class="text-slate-400">encryptedCard (JWE string)</span>
+      <p class="mb-3 text-sm text-slate-400">
+        Completa el formulario y pulsa <strong class="text-orange-200">Cifrar y hacer checkout()</strong>.
+        El enrolamiento usa pop-up con <code class="text-orange-200">windowRef</code> no enumerable.
+      </p>
+
+      <div class="mb-3 flex flex-wrap items-center gap-2">
+        <span class="text-xs text-slate-500">Red por BIN:</span>
+        <span
+          class="rounded px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+          :class="
+            addCardDetectedNetwork === 'SRCVISA'
+              ? 'bg-emerald-500/20 text-emerald-200 ring-1 ring-emerald-500/40'
+              : addCardDetectedNetwork === 'SRCMASTERCARD'
+                ? 'bg-violet-500/20 text-violet-200 ring-1 ring-violet-500/40'
+                : 'bg-amber-500/15 text-amber-200/90 ring-1 ring-amber-500/30'
+          "
+        >
+          {{ addCardNetworkBadgeLabel }}
+        </span>
+      </div>
+
+      <div class="grid gap-3 md:grid-cols-2">
+        <label class="block text-sm md:col-span-2">
+          <span class="text-slate-400">Número de tarjeta (PAN)</span>
+          <input
+            v-model="newCardPan"
+            type="text"
+            inputmode="numeric"
+            autocomplete="cc-number"
+            maxlength="19"
+            class="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-3 py-2 font-mono text-sm text-slate-100"
+            placeholder="4111 …"
+          />
+        </label>
+        <label class="block text-sm">
+          <span class="text-slate-400">Mes cad. (MM)</span>
+          <input
+            v-model="newCardExpMonth"
+            type="text"
+            inputmode="numeric"
+            autocomplete="cc-exp-month"
+            maxlength="2"
+            class="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-3 py-2 font-mono text-sm text-slate-100"
+            placeholder="12"
+          />
+        </label>
+        <label class="block text-sm">
+          <span class="text-slate-400">Año cad. (YYYY)</span>
+          <input
+            v-model="newCardExpYear"
+            type="text"
+            inputmode="numeric"
+            autocomplete="cc-exp-year"
+            maxlength="4"
+            class="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-3 py-2 font-mono text-sm text-slate-100"
+            placeholder="2030"
+          />
+        </label>
+        <label class="block text-sm">
+          <span class="text-slate-400">CVV</span>
+          <input
+            v-model="newCardCvv"
+            type="password"
+            inputmode="numeric"
+            autocomplete="cc-csc"
+            maxlength="4"
+            class="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-3 py-2 font-mono text-sm text-slate-100"
+          />
+        </label>
+        <label class="block text-sm md:col-span-2">
+          <span class="text-slate-400">Titular (opcional)</span>
+          <input
+            v-model="newCardName"
+            type="text"
+            autocomplete="cc-name"
+            class="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+          />
+        </label>
+      </div>
+
+      <p v-if="jweError" class="mt-3 rounded border border-red-500/40 bg-red-950/40 px-3 py-2 text-xs text-red-200">
+        {{ jweError }}
+      </p>
+
+      <label class="mt-4 block text-sm">
+        <span class="text-slate-400">encryptedCard (JWE compact — solo lectura tras cifrar)</span>
         <textarea
           v-model="encryptedCardJwe"
+          readonly
           rows="4"
-          class="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-3 py-2 font-mono text-xs text-slate-100"
+          class="mt-1 w-full cursor-default rounded border border-slate-600 bg-slate-950 px-3 py-2 font-mono text-xs text-slate-400"
         />
       </label>
-      <p class="mb-2 text-xs text-slate-500">
-        Enrolamiento: se usa pop-up con <code class="text-slate-400">windowRef</code> no enumerable (evita error «property window closes the circle»).
-      </p>
+
       <button
         type="button"
         class="mt-3 rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-500 disabled:opacity-50"
-        :disabled="checkingOut || !encryptedCardJwe.trim() || !initialized"
-        @click="runCheckoutAddCard"
+        :disabled="checkingOut || buildingJwe || !initialized || !canSubmitAddCardCheckout"
+        @click="runBuildAndCheckout"
       >
-        checkout() con encryptedCard
+        {{
+          buildingJwe
+            ? 'Cifrando…'
+            : checkingOut
+              ? 'checkout()…'
+              : 'Cifrar y hacer checkout()'
+        }}
       </button>
     </section>
 
@@ -455,6 +553,14 @@ const unbinding = ref(false);
 const validationOtp = ref('');
 const requestedValidationChannelId = ref('');
 const encryptedCardJwe = ref('');
+/** Formulario ADD_CARD → JWE client-side (Web Crypto; doc pan encryption keys). */
+const newCardPan = ref('');
+const newCardExpMonth = ref('');
+const newCardExpYear = ref('');
+const newCardCvv = ref('');
+const newCardName = ref('');
+const buildingJwe = ref(false);
+const jweError = ref('');
 const payloadTypeIndicatorCheckout = ref<'FULL' | 'SUMMARY'>('FULL');
 /** Pop-up + windowRef solo si el flujo lo exige (p. ej. CVM); por defecto off en tarjeta guardada. */
 const checkoutUseWindowRefPopup = ref(false);
@@ -784,6 +890,32 @@ type DerivedDpaDefaults = {
 
 const derivedDpaDefaults = ref<DerivedDpaDefaults | null>(null);
 
+/** RSA JWK por red para PAN encryption (JWT payload.ctx[].data.paymentConfigurations). */
+type PanEncryptionKeys = Partial<Record<(typeof UCTP_ACTIVE_SRC_NETWORKS)[number], Record<string, unknown>>>;
+const panEncryptionKeys = ref<PanEncryptionKeys>({});
+
+function extractPanEncryptionKeys(payload: Record<string, unknown>): PanEncryptionKeys {
+  const keys: PanEncryptionKeys = {};
+  const ctx = Array.isArray(payload.ctx) ? payload.ctx : [];
+  for (const entry of ctx) {
+    if (!entry || typeof entry !== 'object') continue;
+    const data = (entry as Record<string, unknown>).data;
+    if (!data || typeof data !== 'object') continue;
+    const paymentConfigurations = (data as Record<string, unknown>).paymentConfigurations;
+    if (!paymentConfigurations || typeof paymentConfigurations !== 'object') continue;
+    const pc = paymentConfigurations as Record<string, unknown>;
+    for (const network of UCTP_ACTIVE_SRC_NETWORKS) {
+      const cfg = pc[network];
+      if (!cfg || typeof cfg !== 'object') continue;
+      const rawKey = (cfg as Record<string, unknown>).panEncryptionKey;
+      if (rawKey && typeof rawKey === 'object' && !Array.isArray(rawKey)) {
+        keys[network] = rawKey as Record<string, unknown>;
+      }
+    }
+  }
+  return keys;
+}
+
 function normalizePaymentOptions(raw: unknown): Array<Record<string, unknown>> | undefined {
   if (!raw) return undefined;
   if (Array.isArray(raw)) {
@@ -877,6 +1009,142 @@ function buildConsumerIdentity(): Record<string, unknown> {
     identityValue: consumerEmail.value.trim(),
   };
 }
+
+/** Cybersource UCTP — Client-Side PAN Encryption (RSA-OAEP-256 + A256GCM, RFC 7516). */
+function base64UrlEncode(data: Uint8Array): string {
+  let binary = '';
+  for (const byte of data) {
+    binary += String.fromCharCode(byte);
+  }
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function base64UrlEncodeString(str: string): string {
+  return base64UrlEncode(new TextEncoder().encode(str));
+}
+
+async function jweEncrypt(plaintext: string, jwk: Record<string, unknown>): Promise<string> {
+  const publicKey = await crypto.subtle.importKey(
+    'jwk',
+    jwk as JsonWebKey,
+    { name: 'RSA-OAEP', hash: 'SHA-256' },
+    false,
+    ['wrapKey'],
+  );
+
+  const cek = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, ['encrypt']);
+
+  const wrappedKey = new Uint8Array(await crypto.subtle.wrapKey('raw', cek, publicKey, { name: 'RSA-OAEP' }));
+
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+
+  const header: Record<string, string> = { alg: 'RSA-OAEP-256', enc: 'A256GCM' };
+  const kid = jwk.kid;
+  if (typeof kid === 'string' && kid.length > 0) {
+    header.kid = kid;
+  }
+  const encodedHeader = base64UrlEncodeString(JSON.stringify(header));
+  const aad = new TextEncoder().encode(encodedHeader);
+
+  const plaintextBytes = new TextEncoder().encode(plaintext);
+  const encrypted = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv, additionalData: aad, tagLength: 128 },
+    cek,
+    plaintextBytes,
+  );
+
+  const encryptedArray = new Uint8Array(encrypted);
+  const ciphertext = encryptedArray.slice(0, encryptedArray.length - 16);
+  const authTag = encryptedArray.slice(encryptedArray.length - 16);
+
+  return [
+    encodedHeader,
+    base64UrlEncode(wrappedKey),
+    base64UrlEncode(iv),
+    base64UrlEncode(ciphertext),
+    base64UrlEncode(authTag),
+  ].join('.');
+}
+
+/** BIN → red SRC según doc Cybersource (Visa / Mastercard). */
+function detectNetworkByPan(panDigits: string): 'SRCVISA' | 'SRCMASTERCARD' | null {
+  const d = panDigits.replace(/\D/g, '');
+  if (d.length < 9) return null;
+  if (/^4/.test(d)) return 'SRCVISA';
+  const prefix4 = Number.parseInt(d.slice(0, 4), 10);
+  const prefix2 = Number.parseInt(d.slice(0, 2), 10);
+  if (!Number.isNaN(prefix2) && prefix2 >= 51 && prefix2 <= 55) return 'SRCMASTERCARD';
+  if (!Number.isNaN(prefix4) && prefix4 >= 2221 && prefix4 <= 2720) return 'SRCMASTERCARD';
+  return null;
+}
+
+async function buildEncryptedCard(): Promise<string> {
+  if (!crypto?.subtle) {
+    throw new Error('Web Crypto API no disponible (HTTPS o contexto seguro requerido).');
+  }
+  const pan = newCardPan.value.replace(/\s/g, '').replace(/\D/g, '');
+  const network = detectNetworkByPan(pan);
+  if (!network) {
+    throw new Error('BIN no reconocido (solo Visa / Mastercard en este POC).');
+  }
+  const jwk = panEncryptionKeys.value[network];
+  if (!jwk) {
+    throw new Error(`panEncryptionKey no disponible para ${network}; reinicia initialize() con un JWT válido.`);
+  }
+  const mm = newCardExpMonth.value.trim().padStart(2, '0');
+  const yyyy = newCardExpYear.value.trim();
+  if (!/^\d{2}$/.test(mm) || mm === '00') {
+    throw new Error('Mes de expiración inválido (MM).');
+  }
+  if (!/^\d{4}$/.test(yyyy)) {
+    throw new Error('Año de expiración inválido (YYYY).');
+  }
+  const cvv = newCardCvv.value.trim();
+  if (!cvv) {
+    throw new Error('CVV requerido.');
+  }
+  const name = newCardName.value.trim();
+  const cardPayload = {
+    card: {
+      primaryAccountNumber: pan,
+      panExpirationMonth: mm,
+      panExpirationYear: yyyy,
+      cardSecurityCode: cvv,
+      ...(name ? { cardholderFullName: name } : {}),
+    },
+  };
+  return jweEncrypt(JSON.stringify(cardPayload), jwk);
+}
+
+const addCardDetectedNetwork = computed(() => detectNetworkByPan(newCardPan.value.replace(/\s/g, '')));
+
+const addCardNetworkBadgeLabel = computed((): string => {
+  const raw = newCardPan.value.replace(/\s/g, '').replace(/\D/g, '');
+  const n = addCardDetectedNetwork.value;
+  if (n === 'SRCVISA') return 'SRCVISA';
+  if (n === 'SRCMASTERCARD') return 'SRCMASTERCARD';
+  if (raw.length >= 9) return 'BIN no reconocido';
+  return 'Introduce PAN (≥9 dígitos)';
+});
+
+const panEncryptionKeysLoadedLabel = computed((): string => {
+  const k = panEncryptionKeys.value;
+  const parts: string[] = [];
+  if (k.SRCVISA) parts.push('SRCVISA');
+  if (k.SRCMASTERCARD) parts.push('SRCMASTERCARD');
+  return parts.length ? parts.join(', ') : 'ninguna (JWT sin panEncryptionKey)';
+});
+
+const canSubmitAddCardCheckout = computed((): boolean => {
+  const pan = newCardPan.value.replace(/\s/g, '').replace(/\D/g, '');
+  return (
+    pan.length >= 9 &&
+    Boolean(newCardExpMonth.value.trim()) &&
+    Boolean(newCardExpYear.value.trim()) &&
+    Boolean(newCardCvv.value.trim()) &&
+    addCardDetectedNetwork.value !== null
+  );
+});
 
 /** Base64url JWT segment → UTF-8 string (CyberSource suele esperar header/payload decodificados). */
 function decodeJwtSegment(segment: string): string {
@@ -1056,6 +1324,7 @@ async function runInitialize(): Promise<void> {
     return;
   }
   derivedDpaDefaults.value = deriveDpaDefaultsFromDecodedPayload(initParts.payload);
+  panEncryptionKeys.value = extractPanEncryptionKeys(initParts.payload);
   const initOptions = initializeIncludeDpaOptions.value
     ? { dpaTransactionOptions: buildDpaTransactionOptions(false) }
     : undefined;
@@ -1194,8 +1463,24 @@ async function runCheckout(srcDigitalCardId: string): Promise<void> {
   }
 }
 
+async function runBuildAndCheckout(): Promise<void> {
+  buildingJwe.value = true;
+  jweError.value = '';
+  try {
+    encryptedCardJwe.value = await buildEncryptedCard();
+    await runCheckoutAddCard();
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    jweError.value = msg;
+  } finally {
+    buildingJwe.value = false;
+  }
+}
+
 async function runCheckoutAddCard(): Promise<void> {
-  if (!window.VSDK || !initialized.value) return;
+  if (!window.VSDK || !initialized.value) {
+    throw new Error('Inicializa el SDK (initialize()) antes de checkout ADD_CARD.');
+  }
   checkingOut.value = true;
   lastCheckoutDisplay.value = null;
   const req: Record<string, unknown> = {
@@ -1211,6 +1496,7 @@ async function runCheckoutAddCard(): Promise<void> {
     const msg = e instanceof Error ? e.message : String(e);
     pushLog('checkout (ADD_CARD / encryptedCard)', checkoutLogPayload(req), undefined, msg);
     setLastCheckoutPanel('checkout (ADD_CARD / encryptedCard)', null, msg);
+    throw e;
   } finally {
     checkingOut.value = false;
   }
