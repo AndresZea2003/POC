@@ -82,14 +82,6 @@
             y el SDK exige <code class="text-slate-400">transactionAmount</code> en todas las redes.
           </li>
         </ul>
-        <label class="flex items-start gap-2 text-sm md:col-span-2">
-          <input v-model="initializeIncludeDpaOptions" type="checkbox" class="mt-1 rounded border-slate-600" />
-          <span class="text-slate-400">
-            Incluir <code class="text-slate-300">dpaTransactionOptions</code> en
-            <code class="text-slate-300">initialize()</code>
-            <span class="text-slate-500"> (opcional; marcar si el JWT no trae monto o al reactivar AMEX más adelante).</span>
-          </span>
-        </label>
       </div>
 
       <div class="mt-4 grid gap-4 md:grid-cols-2">
@@ -310,16 +302,8 @@
           target="_blank"
           rel="noopener noreferrer"
         >ejemplo Cybersource</a>
-        (sin <code class="text-slate-400">windowRef</code>). Si el SDK pide CVM en pop-up, marca la opción de abajo.
+        (sin <code class="text-slate-400">windowRef</code> ni payload extra).
       </p>
-      <label class="mt-2 flex items-start gap-2 text-sm">
-        <input v-model="checkoutUseWindowRefPopup" type="checkbox" class="mt-1 rounded border-slate-600" />
-        <span class="text-slate-400">
-          Abrir pop-up y pasar <code class="text-slate-300">windowRef</code> (no enumerable: el SDK hace
-          <code class="text-slate-300">JSON.stringify</code> del request y falla si <code class="text-slate-300">windowRef</code>
-          es propiedad enumerable).
-        </span>
-      </label>
       <label class="mt-2 flex items-center gap-2 text-sm">
         <span class="text-slate-400">payloadTypeIndicatorCheckout</span>
         <select
@@ -360,18 +344,8 @@
       </p>
       <p class="mb-3 text-sm text-slate-400">
         Completa el formulario y pulsa <strong class="text-orange-200">Cifrar y hacer checkout()</strong>.
-        Por defecto <strong class="text-orange-200">no</strong> se pasa <code class="text-slate-400">windowRef</code>
-        (el SDK abre su propia ventana, igual que el checkout con tarjeta guardada). Un pop-up
-        <code class="text-slate-400">about:blank</code> preabierto puede quedarse en blanco o bloquear scripts del
-        emisor (sandbox).
+        Este POC usa el flujo base de UCTP sin parámetros de ventana adicionales.
       </p>
-      <label class="mb-3 flex cursor-pointer items-start gap-2 text-sm text-slate-400">
-        <input v-model="addCardUseWindowRefPopup" type="checkbox" class="mt-1 rounded border-slate-600" />
-        <span>
-          Abrir pop-up antes del cifrado y pasar <code class="text-slate-300">windowRef</code> (avanzado; solo si el SDK
-          lo exige). Se abre en el clic para no perder el gesto del usuario tras el cifrado async.
-        </span>
-      </label>
 
       <div class="mb-3 flex flex-wrap items-center gap-2">
         <span class="text-xs text-slate-500">Red por BIN:</span>
@@ -462,22 +436,6 @@
         />
       </label>
 
-      <details class="mt-4 rounded-lg border border-slate-700/80 bg-slate-900/50 px-3 py-2">
-        <summary class="cursor-pointer text-xs font-medium text-slate-400">Opcional: complianceSettings (JSON)</summary>
-        <p class="mt-2 text-[11px] text-slate-500">
-          Si el Business Center exige aceptación de términos, pega aquí el objeto con
-          <code class="text-slate-400">complianceResources</code> (ver API Checkout — ComplianceSettings). Si aparece
-          <code class="text-amber-200">CARD_ADD_FAILED</code>, suele bastar pasar también
-          <code class="text-slate-400">consumer</code>; si no, configurar compliance en Cybersource o este JSON de prueba.
-        </p>
-        <textarea
-          v-model="addCardComplianceSettingsJson"
-          rows="5"
-          class="mt-2 w-full rounded border border-slate-600 bg-slate-950 px-2 py-1.5 font-mono text-[11px] text-slate-300"
-          placeholder='{"complianceResources":[{"complianceType":"TERMS_AND_CONDITIONS","uri":"https://...","version":"1"}]}'
-        />
-      </details>
-
       <button
         type="button"
         class="mt-3 rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-500 disabled:opacity-50"
@@ -566,9 +524,6 @@ const captureContextJwt = ref((env.PUBLIC_VISA_UCTP_CAPTURE_CONTEXT ?? '').trim(
 /** Redes SRC consideradas en el POC (AMEX excluida hasta habilitar DPA + allowedCardNetworks en backend). */
 const UCTP_ACTIVE_SRC_NETWORKS = ['SRCVISA', 'SRCMASTERCARD'] as const;
 
-/** Incluir dpaTransactionOptions en initialize() (opcional con JWT solo Visa/MC). */
-const initializeIncludeDpaOptions = ref(false);
-
 const consumerEmail = ref(DEFAULT_EMAIL);
 const merchantOrderId = ref(typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : String(Date.now()));
 const transactionCurrencyCode = ref('COP');
@@ -594,18 +549,10 @@ const newCardCvv = ref('');
 const newCardName = ref('');
 const buildingJwe = ref(false);
 const jweError = ref('');
-/** JSON opcional para checkout().complianceSettings (TERMS_AND_CONDITIONS, PRIVACY_POLICY, …). */
-const addCardComplianceSettingsJson = ref('');
 const payloadTypeIndicatorCheckout = ref<'FULL' | 'SUMMARY'>('FULL');
-/** Pop-up + windowRef solo si el flujo lo exige (p. ej. CVM); por defecto off en tarjeta guardada. */
-const checkoutUseWindowRefPopup = ref(false);
-/** ADD_CARD: por defecto el SDK abre ventana; pre-abrir about:blank suele causar pop-up vacío / sandbox. */
-const addCardUseWindowRefPopup = ref(false);
 
 /** Imágenes de card art que fallan al cargar (CORS u origen). */
 const failedCardArt = ref<Record<string, boolean>>({});
-
-const UCTP_CHECKOUT_POPUP_NAME = 'VisaUctpCheckout';
 
 const lastCardsResponse = ref<Record<string, unknown> | null>(null);
 const apiLog = ref<{ method: string; request: string; response?: string; error?: string }[]>([]);
@@ -806,99 +753,10 @@ function safeStringify(value: unknown): string {
   }
 }
 
-/**
- * Ventana dedicada para checkout (windowRef). Sin noopener: el SDK debe poder usar la referencia.
- * @see https://developer.visa.com/capabilities/visa-secure-remote-commerce/docs-visa-digital-terminal-js-reference — checkout windowRef
- */
-function openUctpCheckoutPopup(): Window | null {
-  const w = Math.min(640, window.screen.availWidth - 80);
-  const h = Math.min(800, window.screen.availHeight - 80);
-  const left = window.screenX + Math.max(0, (window.outerWidth - w) / 2);
-  const top = window.screenY + Math.max(0, (window.outerHeight - h) / 2);
-  const features = `popup=yes,width=${w},height=${h},left=${Math.round(left)},top=${Math.round(top)},scrollbars=yes,resizable=yes`;
-  // URL vacía (no about:blank): el SDK/emisor navega el contexto; about:blank + scripts del SRC → sandbox errors.
-  const popup = window.open('', UCTP_CHECKOUT_POPUP_NAME, features);
-  if (popup) {
-    try {
-      popup.focus();
-    } catch {
-      /* cross-origin or restricted */
-    }
-  }
-  return popup;
-}
-
-/**
- * windowRef no puede ser enumerable: VSDK clona/loguea el request con JSON.stringify y Window es circular.
- */
-function attachNonEnumerableWindowRef(target: Record<string, unknown>, win: Window): void {
-  const existing = Object.getOwnPropertyDescriptor(target, 'windowRef');
-  if (existing?.configurable) {
-    Reflect.deleteProperty(target, 'windowRef');
-  }
-  Object.defineProperty(target, 'windowRef', {
-    value: win,
-    enumerable: false,
-    configurable: true,
-  });
-}
-
-function checkoutLogPayload(req: Record<string, unknown>): Record<string, unknown> {
-  const logReq = { ...req };
-  const desc = Object.getOwnPropertyDescriptor(req, 'windowRef');
-  if (desc?.value && typeof Window !== 'undefined') {
-    try {
-      if (desc.value instanceof Window) {
-        logReq.windowRef = '[Window:popup — propiedad no enumerable]';
-      }
-    } catch {
-      logReq.windowRef = '[Window]';
-    }
-  }
-  return logReq;
-}
-
-type CheckoutWindowRefMode = 'omit' | 'popup';
-
-async function invokeVsdkCheckout(
-  sdkReq: Record<string, unknown>,
-  windowRefMode: CheckoutWindowRefMode,
-  existingPopup?: Window | null,
-): Promise<Record<string, unknown>> {
+async function invokeVsdkCheckout(sdkReq: Record<string, unknown>): Promise<Record<string, unknown>> {
   const V = window.VSDK;
   if (!V) throw new Error('VSDK no cargado');
-
-  let popupToClose: Window | null = null;
-  if (windowRefMode === 'popup') {
-    const reuse =
-      existingPopup && !existingPopup.closed ? existingPopup : openUctpCheckoutPopup();
-    if (!reuse) {
-      throw new Error('No se pudo abrir la ventana emergente (pop-up bloqueado). Permite pop-ups para este sitio.');
-    }
-    popupToClose = reuse;
-    attachNonEnumerableWindowRef(sdkReq, reuse);
-  }
-
-  try {
-    const res = (await V.checkout(sdkReq)) as Record<string, unknown>;
-    // Cerrar solo en éxito: si cerramos tras reject, el iframe/comunicador puede seguir en vuelo
-    // → Failed to fetch, pop-up vacío al instante, errores en cadena tipo SDK_NOT_INITIALIZED.
-    tryCloseCheckoutPopup(popupToClose);
-    return res;
-  } catch (e: unknown) {
-    throw e;
-  }
-}
-
-function tryCloseCheckoutPopup(popup: Window | null): void {
-  if (!popup) return;
-  try {
-    if (!popup.closed) {
-      popup.close();
-    }
-  } catch {
-    /* ignore — políticas del navegador o origen cruzado */
-  }
+  return (await V.checkout(sdkReq)) as Record<string, unknown>;
 }
 
 function pushLog(method: string, request: unknown, response?: unknown, error?: string) {
@@ -932,9 +790,13 @@ function pushLog(method: string, request: unknown, response?: unknown, error?: s
   }
 }
 
+function toErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 /**
- * Opciones para VSDK checkout/getCards típicos — incluye `paymentOptions`.
- * Intenta usar defaults derivados del JWT de capture context para mantener compatibilidad
+ * Opciones DPA para initialize().
+ * Usa defaults derivados del JWT de capture context para mantener compatibilidad
  * con la misma sesión generada por backend/integración.
  */
 type DerivedDpaDefaults = {
@@ -944,7 +806,6 @@ type DerivedDpaDefaults = {
   consumerNationalIdentifierRequested?: boolean;
   merchantCountryCode?: string;
   dpaLocale?: string;
-  paymentOptions?: Array<Record<string, unknown>>;
 };
 
 const derivedDpaDefaults = ref<DerivedDpaDefaults | null>(null);
@@ -973,17 +834,6 @@ function extractPanEncryptionKeys(payload: Record<string, unknown>): PanEncrypti
     }
   }
   return keys;
-}
-
-function normalizePaymentOptions(raw: unknown): Array<Record<string, unknown>> | undefined {
-  if (!raw) return undefined;
-  if (Array.isArray(raw)) {
-    return raw.filter((entry): entry is Record<string, unknown> => Boolean(entry && typeof entry === 'object'));
-  }
-  if (typeof raw === 'object') {
-    return [raw as Record<string, unknown>];
-  }
-  return undefined;
 }
 
 function deriveDpaDefaultsFromDecodedPayload(payload: Record<string, unknown>): DerivedDpaDefaults | null {
@@ -1026,16 +876,15 @@ function deriveDpaDefaultsFromDecodedPayload(payload: Record<string, unknown>): 
         typeof dto.consumerNationalIdentifierRequested === 'boolean' ? dto.consumerNationalIdentifierRequested : undefined,
       merchantCountryCode: typeof dto.merchantCountryCode === 'string' ? dto.merchantCountryCode : undefined,
       dpaLocale: typeof dto.dpaLocale === 'string' ? dto.dpaLocale : undefined,
-      paymentOptions: normalizePaymentOptions(dto.paymentOptions),
     };
   } catch {
     return null;
   }
 }
 
-function buildDpaTransactionOptions(includePaymentOptions = true): Record<string, unknown> {
+function buildDpaTransactionOptions(): Record<string, unknown> {
   const defaults = derivedDpaDefaults.value;
-  const options: Record<string, unknown> = {
+  return {
     transactionAmount:
       defaults?.transactionAmount ?? {
         transactionAmount: transactionAmount.value,
@@ -1049,16 +898,10 @@ function buildDpaTransactionOptions(includePaymentOptions = true): Record<string
     merchantOrderId: merchantOrderId.value,
     dpaLocale: defaults?.dpaLocale ?? 'es_CO',
   };
-  if (includePaymentOptions) {
-    options.paymentOptions =
-      defaults?.paymentOptions ?? [
-        {
-          dpaDynamicDataTtlMinutes: 15,
-          dynamicDataType: 'CARD_APPLICATION_CRYPTOGRAM_LONG_FORM',
-        },
-      ];
-  }
-  return options;
+}
+
+function buildInitializeOptions(): { dpaTransactionOptions: Record<string, unknown> } {
+  return { dpaTransactionOptions: buildDpaTransactionOptions() };
 }
 
 function buildConsumerIdentity(): Record<string, unknown> {
@@ -1079,26 +922,6 @@ function buildCheckoutConsumerForEncryptedCard(): Record<string, unknown> {
     consumerIdentity: buildConsumerIdentity(),
     emailAddress: email,
   };
-}
-
-/** complianceSettings opcional desde JSON (URLs de términos/privacidad del Business Center). */
-function parseOptionalCheckoutComplianceJson(): Record<string, unknown> | undefined {
-  const raw = addCardComplianceSettingsJson.value.trim();
-  if (!raw) return undefined;
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    throw new Error('complianceSettings: JSON inválido.');
-  }
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw new Error('complianceSettings: debe ser un objeto.');
-  }
-  const o = parsed as Record<string, unknown>;
-  if (!Array.isArray(o.complianceResources)) {
-    throw new Error('complianceSettings debe incluir complianceResources[].');
-  }
-  return o;
 }
 
 /** Cybersource UCTP — Client-Side PAN Encryption (RSA-OAEP-256 + A256GCM, RFC 7516). */
@@ -1416,12 +1239,10 @@ async function runInitialize(): Promise<void> {
   }
   derivedDpaDefaults.value = deriveDpaDefaultsFromDecodedPayload(initParts.payload);
   panEncryptionKeys.value = extractPanEncryptionKeys(initParts.payload);
-  const initOptions = initializeIncludeDpaOptions.value
-    ? { dpaTransactionOptions: buildDpaTransactionOptions(false) }
-    : undefined;
+  const initOptions = buildInitializeOptions();
   const logRequest: Record<string, unknown> = {
     ...core,
-    ...(initOptions ?? {}),
+    ...initOptions,
     pairingReminder: 'JWT + clientLibrary (+ integrity) del mismo POST /uctp/v1/sessions',
     defaultsFromJwt: Boolean(derivedDpaDefaults.value),
     payloadParsedAsObject: true,
@@ -1440,38 +1261,30 @@ async function runInitialize(): Promise<void> {
 }
 
 async function runGetCards(): Promise<void> {
-  const V = window.VSDK;
-  if (!V || !initialized.value) return;
-  gettingCards.value = true;
-  const consumerIdentity = buildConsumerIdentity();
-  const req = { consumerIdentity };
-  try {
-    const res = await V.getCards(req);
-    lastCardsResponse.value = res as Record<string, unknown>;
-    pushLog('getCards', req, res);
-  } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : String(e);
-    lastCardsResponse.value = { actionCode: 'ERROR', error: msg };
-    pushLog('getCards', req, undefined, msg);
-  } finally {
-    gettingCards.value = false;
-  }
+  await runGetCardsRequest();
 }
 
 async function runGetCardsWithOtp(): Promise<void> {
+  await runGetCardsRequest(validationOtp.value.trim(), 'getCards (con validationData)');
+}
+
+async function runGetCardsRequest(validationData?: string, method = 'getCards'): Promise<void> {
   const V = window.VSDK;
   if (!V || !initialized.value) return;
   gettingCards.value = true;
   const consumerIdentity = buildConsumerIdentity();
-  const req = { consumerIdentity, validationData: validationOtp.value.trim() };
+  const req: Record<string, unknown> = { consumerIdentity };
+  if (validationData) {
+    req.validationData = validationData;
+  }
   try {
     const res = await V.getCards(req);
     lastCardsResponse.value = res as Record<string, unknown>;
-    pushLog('getCards (con validationData)', req, res);
+    pushLog(method, req, res);
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : String(e);
+    const msg = toErrorMessage(e);
     lastCardsResponse.value = { actionCode: 'ERROR', error: msg };
-    pushLog('getCards (con validationData)', req, undefined, msg);
+    pushLog(method, req, undefined, msg);
   } finally {
     gettingCards.value = false;
   }
@@ -1537,17 +1350,15 @@ async function runCheckout(srcDigitalCardId: string): Promise<void> {
   lastCheckoutDisplay.value = null;
   const req: Record<string, unknown> = {
     srcDigitalCardId,
-    dpaTransactionOptions: buildDpaTransactionOptions(),
     payloadTypeIndicatorCheckout: payloadTypeIndicatorCheckout.value,
   };
-  const windowRefMode: CheckoutWindowRefMode = checkoutUseWindowRefPopup.value ? 'popup' : 'omit';
   try {
-    const res = await invokeVsdkCheckout(req, windowRefMode);
-    pushLog('checkout', checkoutLogPayload(req), res);
+    const res = await invokeVsdkCheckout(req);
+    pushLog('checkout', req, res);
     setLastCheckoutPanel('checkout', res);
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
-    pushLog('checkout', checkoutLogPayload(req), undefined, msg);
+    pushLog('checkout', req, undefined, msg);
     setLastCheckoutPanel('checkout', null, msg);
   } finally {
     checkingOut.value = false;
@@ -1557,19 +1368,9 @@ async function runCheckout(srcDigitalCardId: string): Promise<void> {
 async function runBuildAndCheckout(): Promise<void> {
   buildingJwe.value = true;
   jweError.value = '';
-  let preOpenedPopup: Window | null = null;
-  if (addCardUseWindowRefPopup.value) {
-    preOpenedPopup = openUctpCheckoutPopup();
-    if (!preOpenedPopup) {
-      jweError.value =
-        'No se pudo abrir la ventana emergente (pop-up bloqueado). Permite pop-ups o desmarca windowRef.';
-      buildingJwe.value = false;
-      return;
-    }
-  }
   try {
     encryptedCardJwe.value = await buildEncryptedCard();
-    await runCheckoutAddCard(preOpenedPopup);
+    await runCheckoutAddCard();
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
     jweError.value = msg;
@@ -1578,7 +1379,7 @@ async function runBuildAndCheckout(): Promise<void> {
   }
 }
 
-async function runCheckoutAddCard(preOpenedPopup?: Window | null): Promise<void> {
+async function runCheckoutAddCard(): Promise<void> {
   if (!window.VSDK || !initialized.value) {
     throw new Error('Inicializa el SDK (initialize()) antes de checkout ADD_CARD.');
   }
@@ -1587,21 +1388,15 @@ async function runCheckoutAddCard(preOpenedPopup?: Window | null): Promise<void>
   const req: Record<string, unknown> = {
     encryptedCard: encryptedCardJwe.value.trim(),
     consumer: buildCheckoutConsumerForEncryptedCard(),
-    dpaTransactionOptions: buildDpaTransactionOptions(),
     payloadTypeIndicatorCheckout: payloadTypeIndicatorCheckout.value,
   };
-  const compliance = parseOptionalCheckoutComplianceJson();
-  if (compliance) {
-    req.complianceSettings = compliance;
-  }
-  const windowRefMode: CheckoutWindowRefMode = addCardUseWindowRefPopup.value ? 'popup' : 'omit';
   try {
-    const res = await invokeVsdkCheckout(req, windowRefMode, preOpenedPopup);
-    pushLog('checkout (ADD_CARD / encryptedCard)', checkoutLogPayload(req), res);
+    const res = await invokeVsdkCheckout(req);
+    pushLog('checkout (ADD_CARD / encryptedCard)', req, res);
     setLastCheckoutPanel('checkout (ADD_CARD / encryptedCard)', res);
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
-    pushLog('checkout (ADD_CARD / encryptedCard)', checkoutLogPayload(req), undefined, msg);
+    pushLog('checkout (ADD_CARD / encryptedCard)', req, undefined, msg);
     setLastCheckoutPanel('checkout (ADD_CARD / encryptedCard)', null, msg);
     throw e;
   } finally {
