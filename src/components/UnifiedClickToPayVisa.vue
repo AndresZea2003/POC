@@ -360,10 +360,18 @@
       </p>
       <p class="mb-3 text-sm text-slate-400">
         Completa el formulario y pulsa <strong class="text-orange-200">Cifrar y hacer checkout()</strong>.
-        El enrolamiento usa pop-up con <code class="text-orange-200">windowRef</code> no enumerable.
-        Si el checkout falla, esa ventana puede quedar abierta: ciérrala antes de volver a intentar
-        (<code class="text-slate-400">window.open</code> reutiliza el mismo nombre de ventana).
+        Por defecto <strong class="text-orange-200">no</strong> se pasa <code class="text-slate-400">windowRef</code>
+        (el SDK abre su propia ventana, igual que el checkout con tarjeta guardada). Un pop-up
+        <code class="text-slate-400">about:blank</code> preabierto puede quedarse en blanco o bloquear scripts del
+        emisor (sandbox).
       </p>
+      <label class="mb-3 flex cursor-pointer items-start gap-2 text-sm text-slate-400">
+        <input v-model="addCardUseWindowRefPopup" type="checkbox" class="mt-1 rounded border-slate-600" />
+        <span>
+          Abrir pop-up antes del cifrado y pasar <code class="text-slate-300">windowRef</code> (avanzado; solo si el SDK
+          lo exige). Se abre en el clic para no perder el gesto del usuario tras el cifrado async.
+        </span>
+      </label>
 
       <div class="mb-3 flex flex-wrap items-center gap-2">
         <span class="text-xs text-slate-500">Red por BIN:</span>
@@ -591,6 +599,8 @@ const addCardComplianceSettingsJson = ref('');
 const payloadTypeIndicatorCheckout = ref<'FULL' | 'SUMMARY'>('FULL');
 /** Pop-up + windowRef solo si el flujo lo exige (p. ej. CVM); por defecto off en tarjeta guardada. */
 const checkoutUseWindowRefPopup = ref(false);
+/** ADD_CARD: por defecto el SDK abre ventana; pre-abrir about:blank suele causar pop-up vacío / sandbox. */
+const addCardUseWindowRefPopup = ref(false);
 
 /** Imágenes de card art que fallan al cargar (CORS u origen). */
 const failedCardArt = ref<Record<string, boolean>>({});
@@ -806,10 +816,10 @@ function openUctpCheckoutPopup(): Window | null {
   const left = window.screenX + Math.max(0, (window.outerWidth - w) / 2);
   const top = window.screenY + Math.max(0, (window.outerHeight - h) / 2);
   const features = `popup=yes,width=${w},height=${h},left=${Math.round(left)},top=${Math.round(top)},scrollbars=yes,resizable=yes`;
-  const popup = window.open('about:blank', UCTP_CHECKOUT_POPUP_NAME, features);
+  // URL vacía (no about:blank): el SDK/emisor navega el contexto; about:blank + scripts del SRC → sandbox errors.
+  const popup = window.open('', UCTP_CHECKOUT_POPUP_NAME, features);
   if (popup) {
     try {
-      popup.document.title = 'Click to Pay';
       popup.focus();
     } catch {
       /* cross-origin or restricted */
@@ -853,18 +863,20 @@ type CheckoutWindowRefMode = 'omit' | 'popup';
 async function invokeVsdkCheckout(
   sdkReq: Record<string, unknown>,
   windowRefMode: CheckoutWindowRefMode,
+  existingPopup?: Window | null,
 ): Promise<Record<string, unknown>> {
   const V = window.VSDK;
   if (!V) throw new Error('VSDK no cargado');
 
   let popupToClose: Window | null = null;
   if (windowRefMode === 'popup') {
-    const popup = openUctpCheckoutPopup();
-    if (!popup) {
+    const reuse =
+      existingPopup && !existingPopup.closed ? existingPopup : openUctpCheckoutPopup();
+    if (!reuse) {
       throw new Error('No se pudo abrir la ventana emergente (pop-up bloqueado). Permite pop-ups para este sitio.');
     }
-    popupToClose = popup;
-    attachNonEnumerableWindowRef(sdkReq, popup);
+    popupToClose = reuse;
+    attachNonEnumerableWindowRef(sdkReq, reuse);
   }
 
   try {
@@ -1545,9 +1557,19 @@ async function runCheckout(srcDigitalCardId: string): Promise<void> {
 async function runBuildAndCheckout(): Promise<void> {
   buildingJwe.value = true;
   jweError.value = '';
+  let preOpenedPopup: Window | null = null;
+  if (addCardUseWindowRefPopup.value) {
+    preOpenedPopup = openUctpCheckoutPopup();
+    if (!preOpenedPopup) {
+      jweError.value =
+        'No se pudo abrir la ventana emergente (pop-up bloqueado). Permite pop-ups o desmarca windowRef.';
+      buildingJwe.value = false;
+      return;
+    }
+  }
   try {
     encryptedCardJwe.value = await buildEncryptedCard();
-    await runCheckoutAddCard();
+    await runCheckoutAddCard(preOpenedPopup);
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
     jweError.value = msg;
@@ -1556,7 +1578,7 @@ async function runBuildAndCheckout(): Promise<void> {
   }
 }
 
-async function runCheckoutAddCard(): Promise<void> {
+async function runCheckoutAddCard(preOpenedPopup?: Window | null): Promise<void> {
   if (!window.VSDK || !initialized.value) {
     throw new Error('Inicializa el SDK (initialize()) antes de checkout ADD_CARD.');
   }
@@ -1572,8 +1594,9 @@ async function runCheckoutAddCard(): Promise<void> {
   if (compliance) {
     req.complianceSettings = compliance;
   }
+  const windowRefMode: CheckoutWindowRefMode = addCardUseWindowRefPopup.value ? 'popup' : 'omit';
   try {
-    const res = await invokeVsdkCheckout(req, 'popup');
+    const res = await invokeVsdkCheckout(req, windowRefMode, preOpenedPopup);
     pushLog('checkout (ADD_CARD / encryptedCard)', checkoutLogPayload(req), res);
     setLastCheckoutPanel('checkout (ADD_CARD / encryptedCard)', res);
   } catch (e: unknown) {
