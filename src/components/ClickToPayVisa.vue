@@ -41,7 +41,7 @@ const loadVisaClickToPay = async () => {
   console.log("Cargando script de VISA Click to Pay...");
   const script = document.createElement("script");
   script.src =
-      "https://testup.cybersource.com/uc/v1/assets/aqcUlTdyA7JBUwaaKxFLTJAGXzRSKtkyTHyd30we--m6ulm8T04Pz6bbgXBPQ0Lsnht-CiCntN53YRuIDMdDGXTvmdtw_TYUiAV1PjZeYq9vYESn54mfWu1pBTVzX_3C7NdlxlqNPHRcyEH9aWHQ2D2IucB1bR6yrV3ZkSqG8wdGoovXmB8OwBVvuG0ad4TvaS0gJCZSPrHrWdh0-/SecureAcceptance.js";
+      "https://testup.cybersource.com/uc/v1/assets/aZ7-TdaQg3cEhk2KsdCdLoGoM4ezUlyZKXXObAne17oP-Ip4y_TT4aAH-Qh0YMPevX0kmUkWlfB9KZc8_lpkzP2E8fOt9MaKvfgP70kKWe7gF2icaU5NauPdKAGLRwyyObdQfUV8cmpu2HT5JfC4W85E-IjUgCi9sfSWZMGQKN2tqBhypevN1AAvM3LohivIL3hPcpNaM3xx2kVIw/SecureAcceptance.js";
       // "https://up.cybersource.com/uc/v1/assets/0.34/SecureAcceptance.js";
   script.async = true;
   script.onload = () => console.log("Script VISA cargado ✅");
