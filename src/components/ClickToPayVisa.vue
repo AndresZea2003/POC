@@ -46,6 +46,7 @@ const DEFAULT_LIBRARY_URL =
     "https://testup.cybersource.com/uc/v1/assets/amb0DIrevwx54EaTGtvTXLy53TGED3v1Yn4k6mPBmMkIeODeJOpUFfekGQZanWwehbpZ2YRQBLWINMJuG3WYex5Ufm2qChlPg74GQwZg8z6_-A98CTnOaVrCxqSlrSsv-aGUU-AoOLhWMO_MXtfy1lHJeKucE0Zm4urXwamSwOosEiV1CB5EneVzCXl4bEX5WUiHdtHlu2P28f1Yf/SecureAcceptance.js";
 // "https://up.cybersource.com/uc/v1/assets/0.34/SecureAcceptance.js";
 
+
 const libraryUrl = ref(DEFAULT_LIBRARY_URL);
 const captureContext = ref("");
 const transientToken = ref("");
