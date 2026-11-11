@@ -6,6 +6,14 @@
         id="buttonPaymentListContainer"
     ></div>
 
+    <!-- URL de la librería (SecureAcceptance.js) -->
+    <input
+        class="mt-6 w-full max-w-md p-3 border border-gray-300 rounded-lg bg-white shadow-md text-xs"
+        v-model="libraryUrl"
+        type="url"
+        placeholder="URL de la librería (SecureAcceptance.js)..."
+    />
+
     <!-- Textarea donde el usuario pega o ve el token transitorio -->
     <textarea
         class="mt-6 w-full max-w-md h-40 p-4 border border-gray-300 rounded-lg bg-white shadow-md resize-none"
@@ -32,30 +40,58 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from "vue";
+import { ref } from "vue";
 
+const DEFAULT_LIBRARY_URL =
+    "https://testup.cybersource.com/uc/v1/assets/amb0DIrevwx54EaTGtvTXLy53TGED3v1Yn4k6mPBmMkIeODeJOpUFfekGQZanWwehbpZ2YRQBLWINMJuG3WYex5Ufm2qChlPg74GQwZg8z6_-A98CTnOaVrCxqSlrSsv-aGUU-AoOLhWMO_MXtfy1lHJeKucE0Zm4urXwamSwOosEiV1CB5EneVzCXl4bEX5WUiHdtHlu2P28f1Yf/SecureAcceptance.js";
+// "https://up.cybersource.com/uc/v1/assets/0.34/SecureAcceptance.js";
+
+const libraryUrl = ref(DEFAULT_LIBRARY_URL);
 const captureContext = ref("");
 const transientToken = ref("");
 
-const loadVisaClickToPay = async () => {
-  console.log("Cargando script de VISA Click to Pay...");
-  const script = document.createElement("script");
-  script.src =
-      "https://testup.cybersource.com/uc/v1/assets/amb0DIrevwx54EaTGtvTXLy53TGED3v1Yn4k6mPBmMkIeODeJOpUFfekGQZanWwehbpZ2YRQBLWINMJuG3WYex5Ufm2qChlPg74GQwZg8z6_-A98CTnOaVrCxqSlrSsv-aGUU-AoOLhWMO_MXtfy1lHJeKucE0Zm4urXwamSwOosEiV1CB5EneVzCXl4bEX5WUiHdtHlu2P28f1Yf/SecureAcceptance.js";
-      // "https://up.cybersource.com/uc/v1/assets/0.34/SecureAcceptance.js";
-  script.async = true;
-  script.onload = () => console.log("Script VISA cargado ✅");
-  script.onerror = () => console.error("Error al cargar el script de VISA.");
-  document.head.appendChild(script);
+let loadedLibraryUrl = null;
+let libraryScript = null;
+
+// Carga la librería desde la URL indicada; si cambió, reemplaza el script anterior.
+const loadVisaClickToPay = (url) => {
+  if (loadedLibraryUrl === url && typeof Accept !== "undefined") {
+    return Promise.resolve();
+  }
+  return new Promise((resolve, reject) => {
+    console.log("Cargando script de VISA Click to Pay...", url);
+    libraryScript?.remove();
+    const script = document.createElement("script");
+    script.src = url;
+    script.async = true;
+    script.onload = () => {
+      loadedLibraryUrl = url;
+      console.log("Script VISA cargado ✅");
+      resolve();
+    };
+    script.onerror = () => {
+      loadedLibraryUrl = null;
+      reject(new Error("Error al cargar el script de VISA: " + url));
+    };
+    libraryScript = script;
+    document.head.appendChild(script);
+  });
 };
 
 const startVisaFlow = async () => {
+  const url = libraryUrl.value.trim();
+  if (!url) {
+    console.error("No se ha definido la URL de la librería 🚨");
+    return;
+  }
   if (!captureContext.value) {
     console.error("No se ha definido captureContext 🚨");
     return;
   }
 
   try {
+    await loadVisaClickToPay(url);
+
     const showArgs = {
       containers: {
         paymentSelection: "#buttonPaymentListContainer",
@@ -76,9 +112,4 @@ const startVisaFlow = async () => {
     console.error("Error inesperado:", e);
   }
 };
-
-onMounted(() => {
-  console.log("Componente montado ✅");
-  loadVisaClickToPay();
-});
 </script>
