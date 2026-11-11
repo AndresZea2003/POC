@@ -1018,14 +1018,13 @@ async function buildEncryptedCard(): Promise<string> {
     throw new Error('CVV requerido.');
   }
   const name = newCardName.value.trim();
+  // Estructura plana `Card` (doc checkout → encryptedCard); sin envoltorio `{ card: ... }`.
   const cardPayload = {
-    card: {
-      primaryAccountNumber: pan,
-      panExpirationMonth: mm,
-      panExpirationYear: yyyy,
-      cardSecurityCode: cvv,
-      ...(name ? { cardholderFullName: name } : {}),
-    },
+    primaryAccountNumber: pan,
+    panExpirationMonth: mm,
+    panExpirationYear: yyyy,
+    cardSecurityCode: cvv,
+    ...(name ? { cardholderFullName: name } : {}),
   };
   return jweEncrypt(JSON.stringify(cardPayload), jwk);
 }
@@ -1248,9 +1247,9 @@ async function runInitialize(): Promise<void> {
     payloadParsedAsObject: true,
   };
   try {
-    await V.initialize(core, initOptions);
+    const initRes = await V.initialize(core, initOptions);
     initialized.value = true;
-    pushLog('initialize', logRequest, { ok: true });
+    pushLog('initialize', logRequest, { ok: true, sdkResult: initRes ?? null });
   } catch (e: unknown) {
     initialized.value = false;
     const msg = e instanceof Error ? e.message : String(e);
@@ -1396,6 +1395,10 @@ async function runCheckoutAddCard(): Promise<void> {
     setLastCheckoutPanel('checkout (ADD_CARD / encryptedCard)', res);
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
+    if (msg.includes('SDK_NOT_INITIALIZED')) {
+      // El SDK perdió/rechazó el estado de initialize(): fuerza re-inicializar con un JWT nuevo.
+      initialized.value = false;
+    }
     pushLog('checkout (ADD_CARD / encryptedCard)', req, undefined, msg);
     setLastCheckoutPanel('checkout (ADD_CARD / encryptedCard)', null, msg);
     throw e;
